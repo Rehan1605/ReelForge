@@ -1,0 +1,49 @@
+{
+    "id": "DLC5kTKPi3i",
+    "status": "downloaded",
+    "source": {
+        "platform": "instagram",
+        "url": "https://www.instagram.com/reel/DLC5kTKPi3i/?utm_source=ig_web_copy_link&igsh=MzRlODBiNWFlZA==",
+        "shortcode": "?utm_source=ig_web_copy_link&igsh=MzRlODBiNWFlZA=="
+    },
+    "creator": {
+        "username": "\ud835\udc6f\ud835\udc82\ud835\udc93\ud835\udc94\ud835\udc89 \ud835\udc7d\ud835\udc8a\ud835\udc8b\ud835\udc82\ud835\udc9a \ud835\udc7a\ud835\udc89\ud835\udc93\ud835\udc8a\ud835\udc97\ud835\udc82\ud835\udc94\ud835\udc95\ud835\udc82\ud835\udc97\ud835\udc82",
+        "full_name": "\ud835\udc6f\ud835\udc82\ud835\udc93\ud835\udc94\ud835\udc89 \ud835\udc7d\ud835\udc8a\ud835\udc8b\ud835\udc82\ud835\udc9a \ud835\udc7a\ud835\udc89\ud835\udc93\ud835\udc8a\ud835\udc97\ud835\udc82\ud835\udc94\ud835\udc95\ud835\udc82\ud835\udc97\ud835\udc82",
+        "verified": null,
+        "followers": null
+    },
+    "metrics": {
+        "views": null,
+        "plays": null
+    },
+    "content": {
+        "caption": "5000+ AI Tools Library at a single place! \ud83d\ude80\n\nYou know what to comment - share it with your friends so that they don\u2019t have to go through it again! \ud83d\udd25\n\n\u2014 Save this reel before you lose it \u2014\n\nFollow @harshviijay to give your best chance at cracking your dream company, just like I did. \u2705\n\n\u2728 Join our broadcast channel for insights about my life at Microsoft and resources which helped me reach there! The link is in my BIO! \n.\n.\n.\n.\n.\n[ Artificial Intelligence , AI Tools , Computer Science , Engineering Students , Website , Studies , Placements , Job , Interview , Resources ]\n\n#ai #chatgpt #gemini #programming #computerscience #interviewtips #college #students #faang #resources #instagramreels #instadaily #explorepage #viral",
+        "transcript": null,
+        "vision_analysis": null
+    },
+    "media": {
+        "video_path": "reels\\DLC5kTKPi3i.mp4",
+        "thumbnail_path": "reels\\DLC5kTKPi3i.jpg",
+        "duration": null
+    },
+    "knowledge": {
+        "models": [],
+        "tools": [
+            "Perplexity",
+            "ChatGPT",
+            "Hugging Face"
+        ],
+        "websites": [
+            "huggingface.co"
+        ],
+        "prompts": [],
+        "concepts": [],
+        "use_cases": [],
+        "tips": [
+            "Use different AI tools for different stages of research."
+        ]
+    },
+    "timestamps": {
+        "reel_created": "20250618"
+    }
+}

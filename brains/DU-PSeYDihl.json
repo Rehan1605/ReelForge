@@ -1,0 +1,48 @@
+{
+    "id": "DU-PSeYDihl",
+    "status": "downloaded",
+    "source": {
+        "platform": "instagram",
+        "url": "https://www.instagram.com/reel/DU-PSeYDihl/?utm_source=ig_web_copy_link&igsh=MzRlODBiNWFlZA==",
+        "shortcode": "?utm_source=ig_web_copy_link&igsh=MzRlODBiNWFlZA=="
+    },
+    "creator": {
+        "username": "Joey Seeman",
+        "full_name": "Joey Seeman",
+        "verified": null,
+        "followers": null
+    },
+    "metrics": {
+        "views": null,
+        "plays": null
+    },
+    "content": {
+        "caption": "Jarvis the AGI has been released\u2026 \ud83d\udea8 comment \u201cJarvis\u201d to learn more about it!\n\n#jarvis #openclaw",
+        "transcript": null,
+        "vision_analysis": null
+    },
+    "media": {
+        "video_path": "reels\\DU-PSeYDihl.mp4",
+        "thumbnail_path": "reels\\DU-PSeYDihl.jpg",
+        "duration": null
+    },
+    "knowledge": {
+        "models": [],
+        "tools": [
+            "Jarvis"
+        ],
+        "websites": [],
+        "prompts": [],
+        "concepts": [
+            "AGI",
+            "Autonomous Goal-Seeking"
+        ],
+        "use_cases": [
+            "Booking restaurant reservations"
+        ],
+        "tips": []
+    },
+    "timestamps": {
+        "reel_created": "20260220"
+    }
+}

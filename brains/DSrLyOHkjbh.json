@@ -1,0 +1,69 @@
+{
+    "id": "DSrLyOHkjbh",
+    "status": "downloaded",
+    "source": {
+        "platform": "instagram",
+        "url": "https://www.instagram.com/reel/DSrLyOHkjbh/?utm_source=ig_web_copy_link&igsh=MzRlODBiNWFlZA==",
+        "shortcode": "?utm_source=ig_web_copy_link&igsh=MzRlODBiNWFlZA=="
+    },
+    "creator": {
+        "username": "Oliver Merrick",
+        "full_name": "Oliver Merrick",
+        "verified": null,
+        "followers": null
+    },
+    "metrics": {
+        "views": null,
+        "plays": null
+    },
+    "content": {
+        "caption": "I showed my friends my Notion and they thought it was a team.\n\n(Comment \u201cNOTION\u201d and I\u2019ll send my full notion operating system running on ai)\n\nWhat they mistook for headcount was actually structure.\n\nHere are the three \u201cdepartments\u201d my OS runs for me:\n\n1. Operations. Client OS with lead intake, delivery plans, and status boards. AI helps turn meetings into tasks and tasks into weekly plans.\n2. Content. A content engine with ideas, briefs, and performance notes tied together. AI turns research and notes into scripts and posts.\n3. Strategy. A documentation hub with business foundations, offers, and systems. AI uses this as context for decisions.\n\nYou can look \u201cfully staffed\u201d on the outside.\n\nWhile staying solo on the inside.\n\n(Comment \u201cNOTION\u201d and I\u2019ll send my full notion operating system running on ai)",
+        "transcript": null,
+        "vision_analysis": null
+    },
+    "media": {
+        "video_path": "reels\\DSrLyOHkjbh.mp4",
+        "thumbnail_path": "reels\\DSrLyOHkjbh.jpg",
+        "duration": null
+    },
+    "knowledge": {
+        "title": "Building a Personal Operating System with Notion",
+        "summary": "Creating a structured workflow using Notion to manage tasks, content, and strategy.",
+        "main_topic": "Personal Productivity",
+        "difficulty": "Intermediate",
+        "key_concepts": [
+            "Notion template design",
+            "Task management",
+            "Content creation",
+            "Strategy documentation"
+        ],
+        "resources": [
+            {
+                "name": "Notion",
+                "type": "Platform",
+                "url": ""
+            }
+        ],
+        "tools": [],
+        "code_snippets": [],
+        "best_practices": [
+            "Use templates to structure your workflow"
+        ],
+        "mistakes_to_avoid": [],
+        "action_items": [
+            "Create a Notion template for task management",
+            "Set up a content engine in Notion",
+            "Develop a strategy documentation system in Notion"
+        ],
+        "tags": [
+            "Notion",
+            "Personal Productivity",
+            "Task Management",
+            "Content Creation",
+            "Strategy Documentation"
+        ]
+    },
+    "timestamps": {
+        "reel_created": "20251225"
+    }
+}

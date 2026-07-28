@@ -1,0 +1,71 @@
+{
+    "id": "DYSc2YBBzDC",
+    "status": "downloaded",
+    "source": {
+        "platform": "instagram",
+        "url": "https://www.instagram.com/reel/DYSc2YBBzDC/?utm_source=ig_web_copy_link&igsh=MzRlODBiNWFlZA==",
+        "shortcode": "?utm_source=ig_web_copy_link&igsh=MzRlODBiNWFlZA=="
+    },
+    "creator": {
+        "username": "Prem Acharya | IT Grads \u2192 AI Dev Jobs \ud83c\udde6\ud83c\uddfa",
+        "full_name": "Prem Acharya | IT Grads \u2192 AI Dev Jobs \ud83c\udde6\ud83c\uddfa",
+        "verified": null,
+        "followers": null
+    },
+    "metrics": {
+        "views": null,
+        "plays": null
+    },
+    "content": {
+        "caption": "The Developer Roadmap \ud83d\udcbb\nComment \u201cROADMAP\u201d, and I\u2019ll send you the link to full details!\n\nWhether you\u2019re just starting with HTML and CSS or you\u2019re diving into LLM integration and Vector DBs, understanding these roles is key to navigating the tech industry. \n\nThe path evolves as you stack your skills:\n\nFrontend Dev: Master the basics with HTML, CSS, JS, React, and Git.\n\nBackend Dev: Focus on the logic with JS/Python, MongoDB/SQL, and APIs.\n\nSoftware Dev: Combine Frontend and Backend with System Design.\n\nFull Stack Dev: Take your software development to the next level with Deployment.\n\nAI Developer: Bridge the gap with Prompting and LLM Integration.\n\nAI Engineer: The peak of the stack, incorporating RAG, Vector DB, LangChain, and Cloud.\n\nWhich level are you currently on? \ud83d\udc47\n\nWhatever your goal, keep building and keep learning. The tech stack never stops evolving!\n\nComment \u201cROADMAP\u201d, and I\u2019ll send you the link to full details!\n.\n.\n#coding #softwareengineersalaries #webdevelopment #AI roadmap",
+        "transcript": null,
+        "vision_analysis": null
+    },
+    "media": {
+        "video_path": "reels\\DYSc2YBBzDC.mp4",
+        "thumbnail_path": "reels\\DYSc2YBBzDC.jpg",
+        "duration": null
+    },
+    "knowledge": {
+        "title": "Developer Roadmap",
+        "summary": "A roadmap for software developers to navigate the tech industry, focusing on various skill levels and roles.",
+        "main_topic": "Software Development",
+        "difficulty": "Intermediate",
+        "key_concepts": [
+            "Frontend Development",
+            "Backend Development",
+            "System Design",
+            "Full Stack Development",
+            "Artificial Intelligence (AI) Development"
+        ],
+        "resources": [
+            {
+                "name": "ROADMAP",
+                "type": "Link",
+                "url": ""
+            }
+        ],
+        "tools": [],
+        "code_snippets": [],
+        "best_practices": [
+            "Keep building and learning to adapt to the evolving tech stack."
+        ],
+        "mistakes_to_avoid": [
+            "Underestimating the importance of AI development"
+        ],
+        "action_items": [
+            "Practice a new skill",
+            "Visit the ROADMAP link for full details"
+        ],
+        "tags": [
+            "software development",
+            "ai development",
+            "full stack development",
+            "frontend development",
+            "backend development"
+        ]
+    },
+    "timestamps": {
+        "reel_created": "20260513"
+    }
+}

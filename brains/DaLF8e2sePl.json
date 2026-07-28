@@ -1,0 +1,69 @@
+{
+    "id": "DaLF8e2sePl",
+    "status": "downloaded",
+    "source": {
+        "platform": "instagram",
+        "url": "https://www.instagram.com/reel/DaLF8e2sePl/?utm_source=ig_web_button_share_sheet&igsh=MzRlODBiNWFlZA==",
+        "shortcode": "?utm_source=ig_web_button_share_sheet&igsh=MzRlODBiNWFlZA=="
+    },
+    "creator": {
+        "username": "\ud835\ude4d\ud835\ude3c\ud835\ude45 \ud835\ude54\ud835\ude3c\ud835\ude3fA\ud835\ude51 \ud83c\uddee\ud83c\uddf3",
+        "full_name": "\ud835\ude4d\ud835\ude3c\ud835\ude45 \ud835\ude54\ud835\ude3c\ud835\ude3fA\ud835\ude51 \ud83c\uddee\ud83c\uddf3",
+        "verified": null,
+        "followers": null
+    },
+    "metrics": {
+        "views": null,
+        "plays": null
+    },
+    "content": {
+        "caption": "\ud83d\udca1 Build your own Torch App using HTML, CSS & JavaScript! \ud83d\udd26\n\nLearn how to: \u2728 Toggle ON/OFF \u2728 Add a glowing torch effect \u2728 Update status with JavaScript \u2728 Practice DOM manipulation & CSS styling\n\nA perfect beginner-friendly web development project to improve your coding skills. \ud83d\ude80\n\n\ud83d\udcbb Save this cheat sheet and start coding today!\n\n\u2764\ufe0f Follow me for more coding notes, projects, and cheat sheets.\n\n#HTML #CSS #JavaScript #WebDevelopment #Coding Frontend Programming LearnToCode CodeNewbie 100DaysOfCode Developer CodingProjects TorchApp Tech",
+        "transcript": null,
+        "vision_analysis": null
+    },
+    "media": {
+        "video_path": "reels\\DaLF8e2sePl.mp4",
+        "thumbnail_path": "reels\\DaLF8e2sePl.jpg",
+        "duration": null
+    },
+    "knowledge": {
+        "title": "Building a Torch App with HTML, CSS & JavaScript",
+        "summary": "Learn how to build a simple web app using HTML, CSS, and JavaScript for beginner-friendly coding practice.",
+        "main_topic": "Web Development",
+        "difficulty": "Beginner",
+        "key_concepts": [
+            "DOM manipulation",
+            "CSS styling",
+            "JavaScript updates"
+        ],
+        "resources": [
+            {
+                "name": "",
+                "type": "",
+                "url": ""
+            }
+        ],
+        "tools": [],
+        "code_snippets": [],
+        "best_practices": [
+            "Use a perfect beginner-friendly project to improve coding skills."
+        ],
+        "mistakes_to_avoid": [],
+        "action_items": [
+            "Practice DOM manipulation & CSS styling"
+        ],
+        "tags": [
+            "web development",
+            "html",
+            "css",
+            "javascript",
+            "frontend programming",
+            "coding",
+            "beginner",
+            "torch app"
+        ]
+    },
+    "timestamps": {
+        "reel_created": "20260629"
+    }
+}

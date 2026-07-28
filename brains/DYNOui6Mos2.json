@@ -1,0 +1,78 @@
+{
+    "id": "DYNOui6Mos2",
+    "status": "downloaded",
+    "source": {
+        "platform": "instagram",
+        "url": "https://www.instagram.com/reel/DYNOui6Mos2/?utm_source=ig_web_copy_link&igsh=MzRlODBiNWFlZA==",
+        "shortcode": "?utm_source=ig_web_copy_link&igsh=MzRlODBiNWFlZA=="
+    },
+    "creator": {
+        "username": "Omkar",
+        "full_name": "Omkar",
+        "verified": null,
+        "followers": null
+    },
+    "metrics": {
+        "views": null,
+        "plays": null
+    },
+    "content": {
+        "caption": "Students usually:\nCreate \u2192 Finish \u2192 Upload to GitHub \u2192 Forget.\n\nBut real ones  don\u2019t work like that.\n\nReal products evolve.\n\nInstead of making 15 random CRUD projects,\ntake ONE project and improve it like a real engineer.\n\nStart by fixing your architecture:\n\u2705 separate routes, controllers, services & DB logic \n\u2705 stop writing everything in one file \n\u2705 create reusable APIs & components\n\nThen make the app feel REAL:\n\u2705 authentication & protected routes \n\u2705 role-based access \n\u2705 proper error handling \n\u2705 loading states & feedback \n\u2705 responsive UI for mobile/tablet\n\nThen optimize it:\n\u2705 pagination \n\u2705 filtering & search \n\u2705 optimized queries \n\u2705 clean API flow\n\nThen make it look like a PRODUCT:\n\u2705 dashboard \n\u2705 analytics \n\u2705 charts \n\u2705 activity tracking \n\u2705 one smart feature (AI/OCR/recommendation/etc.)\n\nAnd finally:\nDEPLOY IT.\n\nBecause localhost projects don\u2019t teach real engineering.\n\nAfter deployment, most students stop.\nReal developers start testing everything.\n\nChecklist after deployment \ud83d\udc47\n\n\u2705 test on mobile + desktop \n\u2705 check API failures \n\u2705 verify auth flow \n\u2705 test slow internet loading \n\u2705 fix responsiveness bugs \n\u2705 add environment variables properly \n\u2705 optimize performance \n\u2705 handle edge cases \n\u2705 monitor console/network errors \n\u2705 improve SEO & metadata \n\u2705 write proper README & setup docs\n\nThese tiny improvements are what make projects feel production-level instead of tutorial-based.\n\nStrong portfolios are not built by making MORE projects.",
+        "transcript": null,
+        "vision_analysis": null
+    },
+    "media": {
+        "video_path": "reels\\DYNOui6Mos2.mp4",
+        "thumbnail_path": "reels\\DYNOui6Mos2.jpg",
+        "duration": null
+    },
+    "knowledge": {
+        "title": "Real-World Web Development Best Practices",
+        "summary": "Mastering real-world web development requires a structured approach, focusing on architecture, authentication, optimization, and deployment.",
+        "main_topic": "Web Development",
+        "difficulty": "Intermediate",
+        "key_concepts": [
+            "Separation of Concerns (SoC)",
+            "Reusability",
+            "Authentication",
+            "Error Handling",
+            "Optimization",
+            "Responsive Design"
+        ],
+        "resources": [
+            {
+                "name": "",
+                "type": "",
+                "url": ""
+            }
+        ],
+        "tools": [],
+        "code_snippets": [],
+        "best_practices": [
+            "Start by fixing your architecture to improve reusability",
+            "Create reusable APIs and components",
+            "Implement authentication and protected routes",
+            "Use proper error handling and loading states",
+            "Optimize queries and API flow"
+        ],
+        "mistakes_to_avoid": [],
+        "action_items": [
+            "Practice improving project architectures",
+            "Visit documentation on separation of concerns",
+            "Deploy a project to test its performance",
+            "Checklist after deployment: test for responsiveness, API failures, authentication flows, slow internet loading, and edge cases"
+        ],
+        "tags": [
+            "web development best practices",
+            "real-world development",
+            "architecture",
+            "authentication",
+            "optimization",
+            "deployment",
+            "responsive design"
+        ]
+    },
+    "timestamps": {
+        "reel_created": "20260511"
+    }
+}

@@ -1,0 +1,59 @@
+{
+    "id": "Da5NYiIsNDG",
+    "status": "downloaded",
+    "source": {
+        "platform": "instagram",
+        "url": "https://www.instagram.com/reels/Da5NYiIsNDG/",
+        "shortcode": "Da5NYiIsNDG"
+    },
+    "creator": {
+        "username": "Janagam Anuhya",
+        "full_name": "Janagam Anuhya",
+        "verified": null,
+        "followers": null
+    },
+    "metrics": {
+        "views": null,
+        "plays": null
+    },
+    "content": {
+        "caption": "You don\u2019t have to be bad at DSA anymore \nComment DSA for the link \n\n[software, coder, developer, google, hiring, interviews, tips, personal, story, experience, algorithms, cs students, computer science, DSA, WEB development, FAANG, programming]\n\n#tech #coding #softwareengineer #webdeveloper #dsa",
+        "transcript": null,
+        "vision_analysis": null
+    },
+    "media": {
+        "video_path": "reels\\Da5NYiIsNDG.mp4",
+        "thumbnail_path": "reels\\Da5NYiIsNDG.jpg",
+        "duration": null
+    },
+    "knowledge": {
+        "tools": [],
+        "websites": [
+            "uiverse.io",
+            "animista.net",
+            "cssbuttons.app"
+        ],
+        "languages": [
+            "CSS",
+            "Python"
+        ],
+        "frameworks": [],
+        "libraries": [],
+        "concepts": [
+            "CSS Animations",
+            "Responsive Design",
+            "REST APIs",
+            "Authentication",
+            "Flexbox",
+            "Grid"
+        ],
+        "tips": [
+            "Use ready-made CSS resources to speed up UI development.",
+            "Consider using tools like Sean Prasal's eight code problems for DSA practice."
+        ],
+        "code_snippets": []
+    },
+    "timestamps": {
+        "reel_created": "20260717"
+    }
+}

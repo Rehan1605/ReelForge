@@ -1,0 +1,38 @@
+{
+    "id": "DVOo3FtCLWo",
+    "status": "downloaded",
+    "source": {
+        "platform": "instagram",
+        "url": "https://www.instagram.com/reel/DVOo3FtCLWo/?utm_source=ig_web_copy_link&igsh=MzRlODBiNWFlZA==",
+        "shortcode": "?utm_source=ig_web_copy_link&igsh=MzRlODBiNWFlZA=="
+    },
+    "creator": {
+        "username": "",
+        "full_name": "",
+        "verified": null,
+        "followers": null
+    },
+    "metrics": {
+        "views": null,
+        "plays": null
+    },
+    "content": {
+        "caption": "How to get premium AI models (like Claude Opus 4.6) for FREE:\n1. Go to GitHub: Log in to your GitHub account and click on your profile picture to open the menu.\n2. Open Settings: Scroll down and click on Settings.\n3. Find Education Benefits: On the left sidebar, go to Billing and licensing, then click on Education benefits.\n4. Apply for the Pack: Click the Start an application button for the GitHub Student Developer Pack. (If you aren\u2019t a student, you can use the details of a family member who is, as mentioned in the video).\n5. Get Approved: Once your application is approved (usually within a few minutes), you\u2019ll unlock the student benefits, including GitHub Copilot.\n6. Access Premium Models: Open Visual Studio Code and use the Copilot chat/CLI. Click the model dropdown menu, and you\u2019ll now have free access to premium models like Claude Opus 4.6, GPT-5.2-Codex, and more!\nBonus: Check out the link in the bio of the Instagram page bitsnlogic for free coding notes, system design guides, and projects!  #claud #ai #gpt #viral #codingreels",
+        "transcript": null,
+        "vision_analysis": null
+    },
+    "media": {
+        "video_path": "reels\\DVOo3FtCLWo.mp4",
+        "thumbnail_path": "reels\\DVOo3FtCLWo.jpg",
+        "duration": null
+    },
+    "knowledge": {
+        "category": "Other",
+        "summary": null,
+        "tags": [],
+        "structured_data": null
+    },
+    "timestamps": {
+        "reel_created": "20260226"
+    }
+}

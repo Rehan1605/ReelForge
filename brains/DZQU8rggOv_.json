@@ -1,0 +1,38 @@
+{
+    "id": "DZQU8rggOv_",
+    "status": "downloaded",
+    "source": {
+        "platform": "instagram",
+        "url": "https://www.instagram.com/reels/DZQU8rggOv_/",
+        "shortcode": "DZQU8rggOv_"
+    },
+    "creator": {
+        "username": "remy",
+        "full_name": "remy",
+        "verified": null,
+        "followers": null
+    },
+    "metrics": {
+        "views": null,
+        "plays": null
+    },
+    "content": {
+        "caption": "the only proof I need to know that soulmates are real \ud83d\udda4",
+        "transcript": null,
+        "vision_analysis": null
+    },
+    "media": {
+        "video_path": "reels\\DZQU8rggOv_.mp4",
+        "thumbnail_path": "reels\\DZQU8rggOv_.jpg",
+        "duration": null
+    },
+    "knowledge": {
+        "category": "Other",
+        "summary": null,
+        "tags": [],
+        "structured_data": null
+    },
+    "timestamps": {
+        "reel_created": "20260606"
+    }
+}

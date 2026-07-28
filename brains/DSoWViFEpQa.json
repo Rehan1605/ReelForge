@@ -1,0 +1,85 @@
+{
+    "id": "DSoWViFEpQa",
+    "status": "downloaded",
+    "source": {
+        "platform": "instagram",
+        "url": "https://www.instagram.com/reel/DSoWViFEpQa/?utm_source=ig_web_copy_link&igsh=MzRlODBiNWFlZA==",
+        "shortcode": "?utm_source=ig_web_copy_link&igsh=MzRlODBiNWFlZA=="
+    },
+    "creator": {
+        "username": "Code With Curious \ud83d\udc68\u200d\ud83d\udcbb",
+        "full_name": "Code With Curious \ud83d\udc68\u200d\ud83d\udcbb",
+        "verified": null,
+        "followers": null
+    },
+    "metrics": {
+        "views": null,
+        "plays": null
+    },
+    "content": {
+        "caption": "You Will Never Struggle With Data Structures & Algorithms Again Explore these free visualization tools: 1\ufe0f\u20e3 visualgo.net 2\ufe0f\u20e3 csvistool.com 3\ufe0f\u20e3 cs.ufsca.edu Stop trying to memorize code. Watch every algorithm come to life - arrays, linked lists, stacks, queues, trees, graphs, sorting, searching, and more. These tools show every operation step-by-step so you finally understand how things work. If you\u2019re preparing for interviews, studying CS, or just starting with data structures and algorithms - this is the fastest way to learn the fundamentals. Save this, share it, and turn complex algorithms into simple visuals you\u2019ll never forget.\n\n\u2705 Share it with your Friends Hashtags & Keywords : Computer pythonprogramming coders datascience codingbootcamp ai machinelearning fyp explore trending trendingreels trendingtop\n#coding #programming #reels #trending #code",
+        "transcript": null,
+        "vision_analysis": null
+    },
+    "media": {
+        "video_path": "reels\\DSoWViFEpQa.mp4",
+        "thumbnail_path": "reels\\DSoWViFEpQa.jpg",
+        "duration": null
+    },
+    "knowledge": {
+        "title": "Data Structures & Algorithms Visualization Tools",
+        "summary": "Free visualization tools for data structures and algorithms, including visualgo.net, csvistool.com, and cs.ufsca.edu, to help understand algorithm steps and concepts.",
+        "main_topic": "Data Structures & Algorithms",
+        "difficulty": "Intermediate",
+        "key_concepts": [
+            "Arrays",
+            "Linked Lists",
+            "Stacks",
+            "Queues",
+            "Trees",
+            "Graphs",
+            "Sorting",
+            "Searching"
+        ],
+        "resources": [
+            {
+                "name": "VisualGo",
+                "type": "Website",
+                "url": "https://www.visualgo.net/"
+            },
+            {
+                "name": "CSVistool",
+                "type": "Website",
+                "url": "https://csvistool.com"
+            },
+            {
+                "name": "cs.ufsca.edu",
+                "type": "Documentation",
+                "url": ""
+            }
+        ],
+        "tools": [
+            "Postman"
+        ],
+        "code_snippets": [],
+        "best_practices": [
+            "Stop trying to memorize code and instead focus on understanding algorithm steps."
+        ],
+        "mistakes_to_avoid": [],
+        "action_items": [
+            "Practice data structures and algorithms using visualization tools"
+        ],
+        "tags": [
+            "datastructures",
+            "algorithms",
+            "visualizationtools",
+            "datascience",
+            "codingbootcamp",
+            "machinelearning",
+            "fyp"
+        ]
+    },
+    "timestamps": {
+        "reel_created": "20251224"
+    }
+}

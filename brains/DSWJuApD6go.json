@@ -1,0 +1,65 @@
+{
+    "id": "DSWJuApD6go",
+    "status": "downloaded",
+    "source": {
+        "platform": "instagram",
+        "url": "https://www.instagram.com/reel/DSWJuApD6go/?utm_source=ig_web_copy_link&igsh=MzRlODBiNWFlZA==",
+        "shortcode": "?utm_source=ig_web_copy_link&igsh=MzRlODBiNWFlZA=="
+    },
+    "creator": {
+        "username": "Allen Tran \ud83e\uddd1\u200d\ud83d\udcbb",
+        "full_name": "Allen Tran \ud83e\uddd1\u200d\ud83d\udcbb",
+        "verified": null,
+        "followers": null
+    },
+    "metrics": {
+        "views": null,
+        "plays": null
+    },
+    "content": {
+        "caption": "Here\u2019s how to get ahead of 99% of other computer science majors! \ud83e\uddd1\u200d\ud83d\udcbb\n\n1. Git\n2. DevOps \n3. Competitive programming\n4. Learn how to talk\n\nLet me know if you want a part 2!\n\n#softwareengineer #computerscience #csmajor #coding #internship",
+        "transcript": null,
+        "vision_analysis": null
+    },
+    "media": {
+        "video_path": "reels\\DSWJuApD6go.mp4",
+        "thumbnail_path": "reels\\DSWJuApD6go.jpg",
+        "duration": null
+    },
+    "knowledge": {
+        "title": "Getting Ahead as a Computer Science Major",
+        "summary": "Mastering Git, DevOps, competitive programming, and communication skills can significantly improve your standing among computer science majors.",
+        "main_topic": "Computer Science Majors",
+        "difficulty": "Intermediate",
+        "key_concepts": [
+            "Git branching and merging",
+            "DevOps and CICD"
+        ],
+        "resources": [
+            {
+                "name": "",
+                "type": "",
+                "url": ""
+            }
+        ],
+        "tools": [],
+        "code_snippets": [],
+        "best_practices": [
+            "Practice speaking in front of a camera to improve communication skills."
+        ],
+        "mistakes_to_avoid": [],
+        "action_items": [
+            "Learn Git and its advanced features"
+        ],
+        "tags": [
+            "git",
+            "devops",
+            "competitive programming",
+            "communication skills",
+            "software engineering"
+        ]
+    },
+    "timestamps": {
+        "reel_created": "20251217"
+    }
+}

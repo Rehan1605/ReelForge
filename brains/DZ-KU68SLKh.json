@@ -1,0 +1,33 @@
+{
+    "id": "DZ-KU68SLKh",
+    "status": "downloaded",
+    "source": {
+        "platform": "instagram",
+        "url": "https://www.instagram.com/reels/DZ-KU68SLKh/",
+        "shortcode": "DZ-KU68SLKh"
+    },
+    "creator": {
+        "username": "artawsauras",
+        "full_name": "Sara | Comms open",
+        "verified": false,
+        "followers": 1421
+    },
+    "metrics": {
+        "views": 543905,
+        "plays": 1445651
+    },
+    "content": {
+        "caption": "Hope it helped \u270a\ud83c\udffb\n.\n.\n.\n#artreel#art#thought\n",
+        "transcript": null,
+        "vision_analysis": null
+    },
+    "media": {
+        "video_path": "reels\\2026-06-24_14-03-11_UTC.mp4",
+        "thumbnail_path": "reels\\2026-06-24_14-03-11_UTC.jpg",
+        "duration": 11.033
+    },
+    "knowledge": {},
+    "timestamps": {
+        "reel_created": 1782309791
+    }
+}

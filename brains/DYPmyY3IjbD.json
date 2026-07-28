@@ -1,0 +1,82 @@
+{
+    "id": "DYPmyY3IjbD",
+    "status": "downloaded",
+    "source": {
+        "platform": "instagram",
+        "url": "https://www.instagram.com/reel/DYPmyY3IjbD/?utm_source=ig_web_copy_link&igsh=MzRlODBiNWFlZA==",
+        "shortcode": "?utm_source=ig_web_copy_link&igsh=MzRlODBiNWFlZA=="
+    },
+    "creator": {
+        "username": "Alaa Alaff | Frontend Developer",
+        "full_name": "Alaa Alaff | Frontend Developer",
+        "verified": null,
+        "followers": null
+    },
+    "metrics": {
+        "views": null,
+        "plays": null
+    },
+    "content": {
+        "caption": "3 CSS Tools That Will Save You Hours.\n\n#css #webdevelopment #csstricks #htmlcss",
+        "transcript": null,
+        "vision_analysis": null
+    },
+    "media": {
+        "video_path": "reels\\DYPmyY3IjbD.mp4",
+        "thumbnail_path": "reels\\DYPmyY3IjbD.jpg",
+        "duration": null
+    },
+    "knowledge": {
+        "title": "CSS Tools for Productivity",
+        "summary": "This reel discusses three CSS tools that can simplify web development tasks: Anemister, Grid generator, and CSS Gradient.",
+        "main_topic": "CSS Tools",
+        "difficulty": "Intermediate",
+        "key_concepts": [
+            "CSS animation library",
+            "Grid layout generator",
+            "Customizable gradient tool"
+        ],
+        "resources": [
+            {
+                "name": "Anemister",
+                "type": "Library",
+                "url": ""
+            },
+            {
+                "name": "Grid generator",
+                "type": "Tool",
+                "url": ""
+            },
+            {
+                "name": "CSS Gradient",
+                "type": "Tool",
+                "url": ""
+            }
+        ],
+        "tools": [
+            "Anemister",
+            "Grid generator",
+            "CSS Gradient"
+        ],
+        "best_practices": [
+            "Use libraries and tools to simplify development tasks"
+        ],
+        "mistakes_to_avoid": [],
+        "action_items": [
+            "Try using Anemister for CSS animations",
+            "Experiment with the Grid generator for grid layout",
+            "Customize gradient colors with CSS Gradient"
+        ],
+        "tags": [
+            "css tools",
+            "productivity",
+            "web development",
+            "animation library",
+            "grid layout generator",
+            "gradient tool"
+        ]
+    },
+    "timestamps": {
+        "reel_created": "20260512"
+    }
+}

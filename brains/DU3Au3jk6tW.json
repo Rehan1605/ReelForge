@@ -1,0 +1,66 @@
+{
+    "id": "DU3Au3jk6tW",
+    "status": "downloaded",
+    "source": {
+        "platform": "instagram",
+        "url": "https://www.instagram.com/reel/DU3Au3jk6tW/?utm_source=ig_web_copy_link&igsh=MzRlODBiNWFlZA==",
+        "shortcode": "?utm_source=ig_web_copy_link&igsh=MzRlODBiNWFlZA=="
+    },
+    "creator": {
+        "username": "D sharanya",
+        "full_name": "D sharanya",
+        "verified": null,
+        "followers": null
+    },
+    "metrics": {
+        "views": null,
+        "plays": null
+    },
+    "content": {
+        "caption": "\u2b07\ufe0f\n\n\ud83d\udc49In my first year of BTech, I was obsessed with one thing: building websites.\nI jumped straight into frontend and started creating e-commerce projects. I was excited\u2026 but things didn\u2019t go exactly as planned. I didn\u2019t touch backend, and I felt like I was missing something.\n\nIn my second year, I started watching roadmap videos on YouTube. Almost every creator said the same thing:\n\u201cEveryone should start with web development.\u201d\n\nThat confused me.\n\nBecause deep down, I didn\u2019t just want to be a web developer. I wanted to become an AI engineer. And I kept wondering \u201chow is web development going to help me build AI systems?\u201d\n\nBut after building a few projects, something clicked.\n\nI realized web development isn\u2019t separate from AI. It\u2019s the bridge.\nYou can build the smartest AI model in the world, but without a clean interface, without integration, without a way for people to use it\u2026 it stays invisible.\n\nThat\u2019s when I decided to combine both worlds.\nWeb Development + AI Systems.\n\nInstead of choosing one, I chose to integrate AI into websites, solve real problems, and then gradually move deeper into building models.\n\nAnd that changed everything.\n\nIf you\u2019re confused between Web Dev, AI, or any other path maybe you don\u2019t have to choose. Maybe you just have to connect the dots.\n\nWhat are your thoughts on this? \ud83d\udc47 Let\u2019s talk\n\n#instagood #fypppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppp #explorepage #sharanyasukrutha #trending \n\n(Engineering students,student life, experience, projects,documenting lifestyle, thoughts, clarification,reels,AI engineer,web development,data scientist,data analyst,goals,discipline,project work,updates)",
+        "transcript": null,
+        "vision_analysis": null
+    },
+    "media": {
+        "video_path": "reels\\DU3Au3jk6tW.mp4",
+        "thumbnail_path": "reels\\DU3Au3jk6tW.jpg",
+        "duration": null
+    },
+    "knowledge": {
+        "title": "Combining Web Development and AI Systems",
+        "summary": "The importance of integrating web development with AI systems to solve real-world problems and build smart models.",
+        "main_topic": "Web Development + AI",
+        "difficulty": "Intermediate",
+        "key_concepts": [
+            "Integration of Web Development and AI",
+            "Building Smart AI Models",
+            "Clean Interfaces and Integration"
+        ],
+        "resources": [
+            {
+                "name": "",
+                "type": "",
+                "url": ""
+            }
+        ],
+        "tools": [],
+        "code_snippets": [],
+        "best_practices": [
+            "Solve real-world problems through web development and AI integration."
+        ],
+        "mistakes_to_avoid": [],
+        "action_items": [
+            "Practice integrating web development with AI systems"
+        ],
+        "tags": [
+            "web development",
+            "ai",
+            "integration",
+            "smart models",
+            "clean interfaces"
+        ]
+    },
+    "timestamps": {
+        "reel_created": "20260217"
+    }
+}

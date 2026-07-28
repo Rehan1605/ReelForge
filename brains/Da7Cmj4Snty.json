@@ -1,0 +1,85 @@
+{
+    "id": "Da7Cmj4Snty",
+    "status": "downloaded",
+    "source": {
+        "platform": "instagram",
+        "url": "https://www.instagram.com/reels/Da7Cmj4Snty/",
+        "shortcode": "Da7Cmj4Snty"
+    },
+    "creator": {
+        "username": "From Zero To Developer",
+        "full_name": "From Zero To Developer",
+        "verified": null,
+        "followers": null
+    },
+    "metrics": {
+        "views": null,
+        "plays": null
+    },
+    "content": {
+        "caption": "\ud83d\ude80 Most students don't fail DSA because it's hard... they fail because they don't have a roadmap.\n\nWhen I started learning DSA, the biggest question was:\n\u2753 Which topic should I study first?\n\u2753 Abdul Bari or Striver?\n\u2753 Apna College or Pepcoding?\n\u2753 LeetCode or GeeksforGeeks?\n\u2753 How many hours should I study every day?\n\nI created this 90-Day DSA Roadmap to answer all of these questions.\n\n\ud83d\udcda In this roadmap, you'll get:\n\u2705 Week-by-week DSA plan\n\u2705 Topic-wise learning path\n\u2705 Best resource for every topic\n\u2705 Daily study schedule\n\u2705 Coding platforms to practice on\n\u2705 Beginner \u2192 Placement level strategy\n\u2705 Weekly handwritten notes & checklists\n\n\ud83c\udfaf Whether you're starting from zero or preparing for placements, this roadmap will help you stay consistent and avoid wasting time jumping between resources.\n\n\ud83d\udcbe Save this post\u2014you'll need it throughout your DSA journey.\n\n\ud83d\udce4 Share it with your coding buddy so you can stay accountable together.\n\n\ud83d\udcac Comment \"ROADMAP\" if you're starting DSA from scratch, and I'll keep bringing the next weeks of the roadmap.\n\nThis is just the beginning\u2014I'll be uploading the complete 90-Day DSA Roadmap week by week. Stay consistent, trust the process, and keep coding. \ud83d\udc99\n\nFollow @enginnersdiary for daily DSA notes, placement preparation, Java, interview tips, and coding roadmaps.\n\n#DSA #DSARoadmap #DataStructures #Algorithms #LeetCode GeeksforGeeks Java Coding PlacementPreparation SoftwareEngineer CodingJourney EngineeringStudents TechCareer Freshers enginnersdiary",
+        "transcript": null,
+        "vision_analysis": null
+    },
+    "media": {
+        "video_path": "reels\\Da7Cmj4Snty.mp4",
+        "thumbnail_path": "reels\\Da7Cmj4Snty.jpg",
+        "duration": null
+    },
+    "knowledge": {
+        "title": "90-Day DSA Roadmap for Beginners",
+        "summary": "A week-by-week learning plan to help beginners master Data Structures and Algorithms with resources, daily study schedules, and practice platforms.",
+        "main_topic": "DSA (Data Structures and Algorithms)",
+        "difficulty": "Beginner",
+        "key_concepts": [
+            "Learning Path",
+            "Topic-wise Study Plan",
+            "Best Resources for Each Topic",
+            "Daily Study Schedule",
+            "Coding Platforms for Practice",
+            "Placement Level Strategy"
+        ],
+        "resources": [
+            {
+                "name": "Pepcoding",
+                "type": "Website",
+                "url": ""
+            },
+            {
+                "name": "LeetCode",
+                "type": "Platform",
+                "url": ""
+            },
+            {
+                "name": "GeeksforGeeks",
+                "type": "Platform",
+                "url": ""
+            }
+        ],
+        "tools": [
+            "Striver"
+        ],
+        "code_snippets": [],
+        "best_practices": [
+            "Stay consistent and avoid wasting time jumping between resources."
+        ],
+        "mistakes_to_avoid": [
+            "Lack of a clear learning plan"
+        ],
+        "action_items": [
+            "Practice with daily study schedules and coding platforms",
+            "Follow the roadmap for consistent progress"
+        ],
+        "tags": [
+            "DSA",
+            "Data Structures",
+            "Algorithms",
+            "Learning Plan",
+            "Roadmap",
+            "Beginner"
+        ]
+    },
+    "timestamps": {
+        "reel_created": "20260718"
+    }
+}

@@ -1,0 +1,38 @@
+{
+    "id": "DWsixc9CWFB",
+    "status": "downloaded",
+    "source": {
+        "platform": "instagram",
+        "url": "https://www.instagram.com/reel/DWsixc9CWFB/?utm_source=ig_web_copy_link&igsh=MzRlODBiNWFlZA==",
+        "shortcode": "?utm_source=ig_web_copy_link&igsh=MzRlODBiNWFlZA=="
+    },
+    "creator": {
+        "username": "Vikas Chawla",
+        "full_name": "Vikas Chawla",
+        "verified": null,
+        "followers": null
+    },
+    "metrics": {
+        "views": null,
+        "plays": null
+    },
+    "content": {
+        "caption": "Every AI company just woke up to bad news\u2026\n\nGoogle just dropped Gemma 4\nAnd gave away AI for free\n\n\u2022 Runs on your 8GB laptop\n\u2022 Works offline\n\u2022 No subscription\n\u2022 No API costs\n\u2022 No limits\n\nYou can:\n\u2022 Build apps\n\u2022 Create AI agents\n\u2022 Process video, audio, images\n\u2022 Use 140+ languages\n\nAnd here\u2019s the crazy part\u2026\nGemma 4 scored 89.2% on the hardest AI math test\n\nGemma 3 scored 20%\n\nThis is a massive leap\n\nAI is no longer locked behind subscriptions.\nIt\u2019s now running locally on your device.\n\nComment GEMMA\nI\u2019ll send you the link.",
+        "transcript": null,
+        "vision_analysis": null
+    },
+    "media": {
+        "video_path": "reels\\DWsixc9CWFB.mp4",
+        "thumbnail_path": "reels\\DWsixc9CWFB.jpg",
+        "duration": null
+    },
+    "knowledge": {
+        "category": "Other",
+        "summary": null,
+        "tags": [],
+        "structured_data": null
+    },
+    "timestamps": {
+        "reel_created": "20260404"
+    }
+}

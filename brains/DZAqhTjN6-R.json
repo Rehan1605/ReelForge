@@ -1,0 +1,103 @@
+{
+    "id": "DZAqhTjN6-R",
+    "status": "downloaded",
+    "source": {
+        "platform": "instagram",
+        "url": "https://www.instagram.com/reel/DZAqhTjN6-R/?utm_source=ig_web_copy_link&igsh=MzRlODBiNWFlZA==",
+        "shortcode": "?utm_source=ig_web_copy_link&igsh=MzRlODBiNWFlZA=="
+    },
+    "creator": {
+        "username": "Christian",
+        "full_name": "Christian",
+        "verified": null,
+        "followers": null
+    },
+    "metrics": {
+        "views": null,
+        "plays": null
+    },
+    "content": {
+        "caption": "If I had to relearn coding from scratch in 2026, this is the exact roadmap I\u2019d follow. Comment \u201cCode\u201d and I\u2019ll send you every resource. \n\n#ai #tech #coding #student #university",
+        "transcript": null,
+        "vision_analysis": null
+    },
+    "media": {
+        "video_path": "reels\\DZAqhTjN6-R.mp4",
+        "thumbnail_path": "reels\\DZAqhTjN6-R.jpg",
+        "duration": null
+    },
+    "knowledge": {
+        "title": "2026 Coding Roadmap",
+        "summary": "Follow this roadmap to learn coding from scratch in 2026: Python, CS50 course, free code compitons certificate, GitHub projects, system design, version control with Git, AI, and machine learning.",
+        "main_topic": "Learning to Code",
+        "difficulty": "Beginner",
+        "key_concepts": [
+            "Python programming",
+            "Code theory",
+            "System design",
+            "Version control with Git",
+            "Machine learning"
+        ],
+        "resources": [
+            {
+                "name": "Harvard CS50 course",
+                "type": "Documentation",
+                "url": ""
+            },
+            {
+                "name": "Free code compitons certificate",
+                "type": "Course",
+                "url": ""
+            },
+            {
+                "name": "GitHub repo",
+                "type": "Website",
+                "url": ""
+            },
+            {
+                "name": "System design primer repo",
+                "type": "Documentation",
+                "url": ""
+            },
+            {
+                "name": "Google's machine learning crash course",
+                "type": "Course",
+                "url": ""
+            },
+            {
+                "name": "Anthropics AI fluency course",
+                "type": "Course",
+                "url": ""
+            }
+        ],
+        "tools": [],
+        "code_snippets": [],
+        "best_practices": [
+            "Build small projects and apply the basics immediately"
+        ],
+        "mistakes_to_avoid": [],
+        "action_items": [
+            "Practice Python programming",
+            "Complete the Harvard CS50 course",
+            "Participate in free code compitons certificate",
+            "Visit the GitHub repo for project ideas",
+            "Start applying the basics to small projects",
+            "Learn about system design and version control with Git",
+            "Finish Google's machine learning crash course",
+            "Pair with Anthropics AI fluency course"
+        ],
+        "tags": [
+            "learning to code",
+            "python programming",
+            "machine learning",
+            "system design",
+            "version control",
+            "ai",
+            "coding roadmap",
+            "2026"
+        ]
+    },
+    "timestamps": {
+        "reel_created": "20260531"
+    }
+}

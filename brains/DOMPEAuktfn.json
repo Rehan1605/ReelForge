@@ -1,0 +1,68 @@
+{
+    "id": "DOMPEAuktfn",
+    "status": "downloaded",
+    "source": {
+        "platform": "instagram",
+        "url": "https://www.instagram.com/reel/DOMPEAuktfn/?utm_source=ig_web_copy_link&igsh=MzRlODBiNWFlZA==",
+        "shortcode": "?utm_source=ig_web_copy_link&igsh=MzRlODBiNWFlZA=="
+    },
+    "creator": {
+        "username": "coding.kitty",
+        "full_name": "coding.kitty",
+        "verified": null,
+        "followers": null
+    },
+    "metrics": {
+        "views": null,
+        "plays": null
+    },
+    "content": {
+        "caption": "Object Orientated Programming (OOP) explained by cats! Follow for more \ud83d\udc31. #cat #programming #coding #catexplain #software #foryou #kittycat #oop",
+        "transcript": null,
+        "vision_analysis": null
+    },
+    "media": {
+        "video_path": "reels\\DOMPEAuktfn.mp4",
+        "thumbnail_path": "reels\\DOMPEAuktfn.jpg",
+        "duration": null
+    },
+    "knowledge": {
+        "title": "Object-Oriented Programming (OOP) explained by Cats",
+        "summary": "A feline teacher explains OOP concepts through the lens of cat characteristics, including classes, inheritance, and interfaces.",
+        "main_topic": "Object-Oriented Programming",
+        "difficulty": "Beginner",
+        "key_concepts": [
+            "Classes",
+            "Inheritance",
+            "Interfaces"
+        ],
+        "resources": [
+            {
+                "name": "",
+                "type": "",
+                "url": ""
+            }
+        ],
+        "tools": [],
+        "code_snippets": [],
+        "best_practices": [
+            "Follow the principles of OOP to design robust and maintainable code."
+        ],
+        "mistakes_to_avoid": [
+            "Using multiple inheritance can lead to the 'diamond problem'"
+        ],
+        "action_items": [
+            "Practice designing classes, interfaces, and inheritance hierarchies using real-world examples"
+        ],
+        "tags": [
+            "Object-Oriented Programming",
+            "Classes",
+            "Inheritance",
+            "Interfaces",
+            "Design Patterns"
+        ]
+    },
+    "timestamps": {
+        "reel_created": "20250904"
+    }
+}

@@ -1,0 +1,66 @@
+{
+    "id": "DKmpXKux7A-",
+    "status": "downloaded",
+    "source": {
+        "platform": "instagram",
+        "url": "https://www.instagram.com/reel/DKmpXKux7A-/?utm_source=ig_web_copy_link&igsh=MzRlODBiNWFlZA==",
+        "shortcode": "?utm_source=ig_web_copy_link&igsh=MzRlODBiNWFlZA=="
+    },
+    "creator": {
+        "username": "Bashiri Smith",
+        "full_name": "Bashiri Smith",
+        "verified": null,
+        "followers": null
+    },
+    "metrics": {
+        "views": null,
+        "plays": null
+    },
+    "content": {
+        "caption": "Comment PROJECT PROMPT to get my free ChatGPT prompt that helps you generate resume-ready coding projects that stand out in today\u2019s AI-driven job market!\n\nThis prompt gives you 3 unique project ideas that:\n1\ufe0f\u20e3 Use beginner-friendly but powerful AI tools (LLMs, automation, agents) \ud83e\udd16\n2\ufe0f\u20e3 Teach real-world dev skills with full-stack JavaScript or Python \ud83d\udcbb\n3\ufe0f\u20e3 Solve real problems and provide real value to users \ud83d\udee0\ufe0f\n4\ufe0f\u20e3 Come with AI use cases, advanced features & resume-ready pitches \ud83d\udcc4\n\n\u26a1Perfect if you\u2019re tired of building CRUD apps and want projects that actually impress hiring managers.\n\n\ud83d\udcac Comment PROJECT PROMPT\u201dbelow and I\u2019ll send it to you for free!\n\n#codingprojects #learnai #softwareengineer #aiprojects #techcareer #coding",
+        "transcript": null,
+        "vision_analysis": null
+    },
+    "media": {
+        "video_path": "reels\\DKmpXKux7A-.mp4",
+        "thumbnail_path": "reels\\DKmpXKux7A-.jpg",
+        "duration": null
+    },
+    "knowledge": {
+        "title": "AI-Driven Coding Project Ideas for Software Engineers",
+        "summary": "Get three unique coding project ideas using beginner-friendly AI tools, real-world dev skills, and full-stack JavaScript or Python, to stand out in today's job market.",
+        "main_topic": "Coding Projects with AI",
+        "difficulty": "Intermediate",
+        "key_concepts": [
+            "AI-driven coding projects",
+            "real-world development skills",
+            "full-stack JavaScript or Python"
+        ],
+        "resources": [
+            {
+                "name": "ChatGPT",
+                "type": "AI Assistant",
+                "url": ""
+            }
+        ],
+        "tools": [],
+        "code_snippets": [],
+        "best_practices": [
+            "Use AI in meaningful ways to build projects that provide real value to users."
+        ],
+        "mistakes_to_avoid": [],
+        "action_items": [
+            "Practice the project ideas",
+            "Visit ChatGPT for free prompt"
+        ],
+        "tags": [
+            "ai-driven coding projects",
+            "software engineer career",
+            "full-stack javascript",
+            "python development"
+        ]
+    },
+    "timestamps": {
+        "reel_created": "20250607"
+    }
+}

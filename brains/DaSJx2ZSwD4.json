@@ -1,0 +1,80 @@
+{
+    "id": "DaSJx2ZSwD4",
+    "status": "downloaded",
+    "source": {
+        "platform": "instagram",
+        "url": "https://www.instagram.com/reel/DaSJx2ZSwD4/?utm_source=ig_web_button_share_sheet&igsh=MzRlODBiNWFlZA==",
+        "shortcode": "?utm_source=ig_web_button_share_sheet&igsh=MzRlODBiNWFlZA=="
+    },
+    "creator": {
+        "username": "Avi Vashishta",
+        "full_name": "Avi Vashishta",
+        "verified": null,
+        "followers": null
+    },
+    "metrics": {
+        "views": null,
+        "plays": null
+    },
+    "content": {
+        "caption": "Top 5 AI Projects to Build This Summer\n\n1. \ud83c\udfcb\ufe0f AI Fitness Coach\n\nDifficulty: 5/10\nFocus: AI + Vision + Beautiful UI\n\nBuild:\n\n* Upload meal photos \u2192 calorie estimation\n* Workout planner & progression\n* Form analysis using camera\n* Daily habit tracking\n\nTech Stack:\n\n* Next.js\n* OpenAI / Gemini Vision\n* Supabase\n* Vercel AI SDK\n* Charts (Tremor/Recharts)\n\nYou\u2019ll Learn:\nVision models \u2022 Structured outputs \u2022 Image uploads \u2022 Authentication \u2022 Dashboards\n\n2. \ud83e\udde0 AI Second Brain for Developers\n\nDifficulty: 7/10\nFocus: Personal productivity\n\nBuild:\n\n* Remembers conversations\n* Stores project context\n* Search old decisions\n* \u201cWhat did we decide last week?\u201d\n\nTech Stack:\n\n* Next.js\n* LangGraph / OpenAI Agents SDK\n* pgvector / Pinecone\n* RAG\n* Redis\n\nYou\u2019ll Learn:\nEmbeddings \u2022 RAG \u2022 Long-term memory \u2022 Context engineering \u2022 Vector databases\n\n3. \ud83d\udcf0 Personalized AI News Agent\n\nDifficulty: 6/10\nFocus: Agentic workflows\n\nBuild:\n\n* Reads hundreds of articles\n* Learns your interests\n* Daily digest\n* Explains why news matters\n\nTech Stack:\n\n* Firecrawl\n* OpenAI\n* Trigger.dev / Inngest\n* Tavily\n* Resend\n\nYou\u2019ll Learn:\nScheduling \u2022 Tool calling \u2022 Search \u2022 Summarization \u2022 Email automation\n\n4. \ud83e\udd16 Open Source Agent Builder\n\nDifficulty: 9/10\nFocus: AI Infrastructure\n\nBuild:\n\n* Visual agent builder\n* Swap LLMs\n* Configure tools\n* Memory & prompt playground\n* Deploy with one click\n\nTech Stack:\n\n* Next.js\n* LangGraph\n* OpenAI / Claude / Gemini\n* MCP\n* Docker\n* Redis\n* PostgreSQL\n\nYou\u2019ll Learn:\nAgent orchestration \u2022 MCP \u2022 Multi-model routing \u2022 Tool execution \u2022 Production AI architecture\n\n5. \ud83d\udcbc AI Job Hunter\n\nDifficulty: 7/10\nFocus: Career + Automation\n\nBuild:\n\n* Resume optimizer\n* LinkedIn profile review\n* Portfolio feedback\n* Job matching\n* Auto-generated cover letters\n* Interview prep\n\nTech Stack:\n\n* Next.js\n* OpenAI\n* Firecrawl\n* RAG\n* Clerk\n* Supabase\n\nYou\u2019ll Learn:\nStructured generation \u2022 Web scraping \u2022 AI workflows \u2022 Document parsing \u2022 Personalization\n\n(Learn Coding, Tech, Claude, Engineering, Careertok, Build)",
+        "transcript": null,
+        "vision_analysis": null
+    },
+    "media": {
+        "video_path": "reels\\DaSJx2ZSwD4.mp4",
+        "thumbnail_path": "reels\\DaSJx2ZSwD4.jpg",
+        "duration": null
+    },
+    "knowledge": {
+        "models": [],
+        "tools": [
+            "Perplexity",
+            "ChatGPT"
+        ],
+        "websites": [
+            "huggingface.co",
+            "openai.com",
+            "supabase.io",
+            "vercel.com",
+            "nextjs.org",
+            "firecrawl.app",
+            "trigger.dev",
+            "inngest.io",
+            "tavily.io",
+            "resend.is",
+            "langgraph.ai",
+            "pinecone.io",
+            "redis.io",
+            "clerk.co"
+        ],
+        "prompts": [],
+        "concepts": [
+            "Research",
+            "Personal productivity",
+            "Agentic workflows",
+            "AI Infrastructure",
+            "Career + Automation",
+            "Fine-tuning",
+            "RAG",
+            "Text-to-image generation",
+            "Prompt Engineering",
+            "Image uploads"
+        ],
+        "use_cases": [
+            "Getting source-backed answers",
+            "Brainstorming ideas",
+            "Discovering open-source models",
+            "Building an AI Fitness Coach",
+            "Creating a personalized news agent",
+            "Building an Open Source Agent Builder",
+            "Finding job matching and auto-generated cover letters"
+        ],
+        "tips": [
+            "Use different AI tools for different stages of research."
+        ]
+    },
+    "timestamps": {
+        "reel_created": "20260702"
+    }
+}
