@@ -3,6 +3,7 @@ from onenote.graph_client import GraphClient
 client = GraphClient()
 client.authenticate()
 
-profile = client.get_profile()
+notebook = client.get_or_create_notebook("InstaBrain")
 
-print(profile)
+print(notebook["displayName"])
+print(notebook["links"]["oneNoteWebUrl"]["href"])

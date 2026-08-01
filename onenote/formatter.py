@@ -136,3 +136,6 @@ def format_to_html(brain: dict) -> str:
 
     return "\n".join(parts)
 
+
+def format_brain_object(brain: dict) -> str:
+    return format_to_html(brain)
