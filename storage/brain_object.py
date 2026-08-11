@@ -146,7 +146,12 @@ def update_latest_knowledge(knowledge: dict):
         print("Extractor output was empty; keeping existing Brain Object knowledge.")
         return brain
 
+    existing_category = brain["knowledge"].get("category")
+
     brain["knowledge"] = knowledge
+
+    if existing_category and not brain["knowledge"].get("category"):
+        brain["knowledge"]["category"] = existing_category
 
     with open(brain_path, "w", encoding="utf-8") as f:
         json.dump(brain, f, indent=4)

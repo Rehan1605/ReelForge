@@ -3,8 +3,8 @@
     "status": "downloaded",
     "source": {
         "platform": "instagram",
-        "url": "https://www.instagram.com/reel/DZAqhTjN6-R/?utm_source=ig_web_copy_link&igsh=MzRlODBiNWFlZA==",
-        "shortcode": "?utm_source=ig_web_copy_link&igsh=MzRlODBiNWFlZA=="
+        "url": "https://www.instagram.com/reel/DZAqhTjN6-R/",
+        "shortcode": "DZAqhTjN6-R"
     },
     "creator": {
         "username": "Christian",
@@ -27,36 +27,41 @@
         "duration": null
     },
     "knowledge": {
-        "title": "2026 Coding Roadmap",
-        "summary": "Follow this roadmap to learn coding from scratch in 2026: Python, CS50 course, free code compitons certificate, GitHub projects, system design, version control with Git, AI, and machine learning.",
-        "main_topic": "Learning to Code",
+        "title": "2026 Coding Learning Roadmap",
+        "summary": "Follow this roadmap to learn coding from scratch in 2026, focusing on Python, project development, system design, AI, and version control.",
+        "main_topic": "Programming",
         "difficulty": "Beginner",
         "key_concepts": [
-            "Python programming",
-            "Code theory",
-            "System design",
-            "Version control with Git",
-            "Machine learning"
+            "Python",
+            "System Design",
+            "Version Control with Git",
+            "Machine Learning",
+            "AI"
         ],
         "resources": [
             {
                 "name": "Harvard CS50 course",
-                "type": "Documentation",
-                "url": ""
-            },
-            {
-                "name": "Free code compitons certificate",
                 "type": "Course",
                 "url": ""
             },
             {
-                "name": "GitHub repo",
-                "type": "Website",
+                "name": "Free Code Competitons Certificate",
+                "type": "Certificate",
                 "url": ""
             },
             {
-                "name": "System design primer repo",
+                "name": "GitHub repo",
+                "type": "Repository",
+                "url": ""
+            },
+            {
+                "name": "Tutorial on version control",
                 "type": "Documentation",
+                "url": ""
+            },
+            {
+                "name": "System Design Primer Repo",
+                "type": "Repository",
                 "url": ""
             },
             {
@@ -65,39 +70,49 @@
                 "url": ""
             },
             {
-                "name": "Anthropics AI fluency course",
+                "name": "Anthropics AI Fluency Course",
                 "type": "Course",
                 "url": ""
             }
         ],
-        "tools": [],
+        "tools": [
+            "Python",
+            "Git",
+            "VS Code"
+        ],
         "code_snippets": [],
         "best_practices": [
-            "Build small projects and apply the basics immediately"
+            "Build small projects from day one to gain practical experience."
         ],
-        "mistakes_to_avoid": [],
+        "mistakes_to_avoid": [
+            "Don't skip system design and version control."
+        ],
         "action_items": [
-            "Practice Python programming",
+            "Learn Python",
             "Complete the Harvard CS50 course",
-            "Participate in free code compitons certificate",
-            "Visit the GitHub repo for project ideas",
-            "Start applying the basics to small projects",
-            "Learn about system design and version control with Git",
+            "Start a GitHub repo and build small projects",
+            "Practice system design and version control with Git",
             "Finish Google's machine learning crash course",
-            "Pair with Anthropics AI fluency course"
+            "Take Anthropics AI Fluency Course"
         ],
         "tags": [
-            "learning to code",
-            "python programming",
-            "machine learning",
-            "system design",
-            "version control",
+            "python",
+            "coding",
+            "learningroadmap",
             "ai",
-            "coding roadmap",
-            "2026"
-        ]
+            "systemdesign",
+            "versioncontrol",
+            "machinelearning",
+            "git",
+            "githubrepo",
+            "versiocontrol",
+            "googlemlcrashcourse",
+            "anthropicsaifluencycourse"
+        ],
+        "category": "Programming"
     },
     "timestamps": {
-        "reel_created": "20260531"
+        "reel_created": "20260531",
+        "processed_at": "2026-08-11T22:54:52"
     }
 }

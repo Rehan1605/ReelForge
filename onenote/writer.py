@@ -32,7 +32,12 @@ class OneNoteWriter:
 
     def write(self, brain):
         category = brain["knowledge"]["category"]
+        title = brain["knowledge"]["title"]
         section = self.get_section_for_category(category)
         html_content = format_brain_object(brain)
 
-        return self.client.create_page(section["id"], html_content)
+        return self.client.create_page(
+            section["id"],
+            title,
+            html_content
+        )

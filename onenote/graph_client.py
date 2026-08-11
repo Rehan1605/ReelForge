@@ -1,4 +1,5 @@
 import os
+from html import escape
 
 import msal
 import requests
@@ -159,9 +160,20 @@ class GraphClient:
 
         raise Exception(response.text)
 
-    def create_page(self, section_id, html_content):
+    def create_page(self, section_id, title, html_content):
         if self.access_token is None:
             raise Exception("Not authenticated.")
+
+        page_html = f"""
+<html>
+<head>
+    <title>{escape(str(title))}</title>
+</head>
+<body>
+    {html_content}
+</body>
+</html>
+"""
 
         response = requests.post(
             f"{GRAPH_BASE_URL}/me/onenote/sections/{section_id}/pages",
@@ -169,7 +181,7 @@ class GraphClient:
                 **self._headers(),
                 "Content-Type": "text/html"
             },
-            data=html_content
+            data=page_html
         )
 
         if response.status_code == 201:
