@@ -27,25 +27,25 @@
         "duration": null
     },
     "knowledge": {
-        "title": "2026 Coding Learning Roadmap",
-        "summary": "Follow this roadmap to learn coding from scratch in 2026, focusing on Python, project development, system design, AI, and version control.",
-        "main_topic": "Programming",
+        "title": "2026 Coding Roadmap",
+        "summary": "A step-by-step guide to learning coding from scratch in 2026, covering Python, AI, system design, and version control.",
+        "main_topic": "Coding Education",
         "difficulty": "Beginner",
         "key_concepts": [
             "Python",
             "System Design",
             "Version Control with Git",
             "Machine Learning",
-            "AI"
+            "AI Fluency"
         ],
         "resources": [
             {
                 "name": "Harvard CS50 course",
                 "type": "Course",
-                "url": ""
+                "url": "https://cs50.harvard.edu/"
             },
             {
-                "name": "Free Code Competitons Certificate",
+                "name": "Free Code Competitions certificate",
                 "type": "Certificate",
                 "url": ""
             },
@@ -60,14 +60,14 @@
                 "url": ""
             },
             {
-                "name": "System Design Primer Repo",
+                "name": "System Design Primer Repo on GitHub",
                 "type": "Repository",
                 "url": ""
             },
             {
-                "name": "Google's machine learning crash course",
+                "name": "Google's Machine Learning Crash Course",
                 "type": "Course",
-                "url": ""
+                "url": "https://developers.google.com/machine-learning/crash-course"
             },
             {
                 "name": "Anthropics AI Fluency Course",
@@ -77,42 +77,34 @@
         ],
         "tools": [
             "Python",
+            "GitHub",
             "Git",
-            "VS Code"
+            "Cloud",
+            "Postman"
         ],
         "code_snippets": [],
         "best_practices": [
-            "Build small projects from day one to gain practical experience."
+            "Learn Python first to make it easier to pick up other languages."
         ],
         "mistakes_to_avoid": [
-            "Don't skip system design and version control."
+            "Don't skip AI and machine learning in your education.",
+            "Avoid trying to memorize code without understanding the basics."
         ],
         "action_items": [
-            "Learn Python",
-            "Complete the Harvard CS50 course",
-            "Start a GitHub repo and build small projects",
-            "Practice system design and version control with Git",
-            "Finish Google's machine learning crash course",
-            "Take Anthropics AI Fluency Course"
+            "Practice building small projects",
+            "Visit GitHub repo for inspiration"
         ],
         "tags": [
-            "python",
-            "coding",
-            "learningroadmap",
-            "ai",
+            "codingeducation",
+            "pythonprogramming",
+            "aiandmlearning",
             "systemdesign",
-            "versioncontrol",
-            "machinelearning",
-            "git",
-            "githubrepo",
-            "versiocontrol",
-            "googlemlcrashcourse",
-            "anthropicsaifluencycourse"
+            "versioncontrolgit"
         ],
         "category": "Programming"
     },
     "timestamps": {
         "reel_created": "20260531",
-        "processed_at": "2026-08-11T22:54:52"
+        "processed_at": "2026-08-12T20:26:28"
     }
 }

@@ -29,7 +29,4 @@ def categorize(caption, transcript):
     raw_category = response.json()["response"]
     category = raw_category.strip()
 
-    print(f"Raw categorizer response: {raw_category}")
-    print(f"Parsed category: {category}")
-
     return category

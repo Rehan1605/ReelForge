@@ -101,9 +101,6 @@ def format_to_html(brain: dict) -> str:
     parts.append("<html>")
     parts.append("<body>")
 
-    title = knowledge.get("title", "Untitled")
-    parts.append(f"<h1>{escape(title)}</h1>")
-
     timestamps = brain.get("timestamps", {})
     source = brain.get("source", {})
 

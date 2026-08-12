@@ -40,7 +40,9 @@ def _format_summary(result):
     content = brain.get("content") or {}
     source = brain.get("source") or {}
     caption = content.get("caption") or ""
-    title = caption.splitlines()[0] if caption else source.get("shortcode", "Untitled")
+    title = knowledge.get("title") or (
+        caption.splitlines()[0] if caption else source.get("shortcode", "Untitled")
+    )
     category = result.get("category") or knowledge.get("category") or "Unknown"
     summary = knowledge.get("summary") or "No summary available."
     key_takeaways = _first_available(
@@ -77,20 +79,11 @@ def _format_summary(result):
 async def receive(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = update.message.text.strip()
 
-    print("\n==============================")
-    print("NEW MESSAGE RECEIVED")
-    print("==============================")
-    print(f"Message: {message}")
-
     if "instagram.com" not in message.lower():
-        print("Not an Instagram Reel")
-
         await update.message.reply_text(
             "Please send a valid Instagram Reel link."
         )
         return
-
-    print("Instagram Reel Detected")
 
     await update.message.reply_text(
         "Reel received. Added to processing queue..."

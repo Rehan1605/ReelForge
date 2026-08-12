@@ -1,0 +1,78 @@
+{
+    "id": "Db564cDMqH-",
+    "status": "downloaded",
+    "source": {
+        "platform": "instagram",
+        "url": "https://www.instagram.com/reel/Db564cDMqH-/?utm_source=ig_web_copy_link&igsh=MzRlODBiNWFlZA==",
+        "shortcode": "?utm_source=ig_web_copy_link&igsh=MzRlODBiNWFlZA=="
+    },
+    "creator": {
+        "username": "Omkar",
+        "full_name": "Omkar",
+        "verified": null,
+        "followers": null
+    },
+    "metrics": {
+        "views": null,
+        "plays": null
+    },
+    "content": {
+        "caption": "Learn how to explain it properly in an interview. \n\nInterviewers want to understand your problem-solving, decisions and technical depth.\n\nStructure your answers like this \ud83d\udc47\n\n1\ufe0f\u20e3 STAR \u2014 Tell your project story\n\nUse when they ask: \u201cTell me about your project.\u201d\n\nS \u2014 Situation: Explain the problem, context or need.\nT \u2014 Task: Define what you were responsible for.\nA \u2014 Action: Focus on what YOU did  implementation, decisions, challenges and problem solving.\nR \u2014 Result: Explain the outcome. Mention measurable impact or results when relevant.\n\n\u26a0\ufe0f Keep Action as the biggest part.\n\n2\ufe0f\u20e3 PREP \u2014 Explain technical decisions\n\nUse when they ask: \u201cWhy did you use X?\u201d\n\nP \u2014 Point: State your decision.\nR \u2014 Reason: Explain the technical reasoning.\nE \u2014 Evidence: Support it with requirements, constraints or results.\nP \u2014 Point: Connect it back to the project requirement.\n\nThe important part is WHY, not just WHAT.\n\n3\ufe0f\u20e3 PROBLEM \u2192 APPROACH \u2192 TRADE-OFF\n\nUse for architecture and technology questions.\n\nExplain:\n\n\u2192 What problem were you solving?\n\u2192 What approaches did you consider?\n\u2192 What did you choose and why?\n\u2192 What limitations did it have?\n\u2192 What trade-offs did you accept?\n\nThis shows intentional decision-making.\n\n4\ufe0f\u20e3 ARCHITECTURE \u2192 FLOW \u2192 FAILURE\n\nUse when the interviewer goes deeper technically.\n\nArchitecture: Major components and how they communicate.\nFlow: What happens from user action to response/data change.\nFailure: What happens when something goes wrong API failure, database failure, invalid input, timeout, duplicate requests, etc.\n\nThis tests your system understanding.\n\n5\ufe0f\u20e3 OWNERSHIP \u2014 Know what YOU did\n\nFor team projects, be ready to explain:\n\n\u2192 Your responsibilities\n\u2192 Your technical contributions\n\u2192 Decisions you made\n\u2192 Problems you solved\n\u2192 How your work connects with the rest of the system\n\nNever claim work you can\u2019t defend technically.\n\n6\ufe0f\u20e3 DEFEND YOUR DECISIONS\n\nFor every important technology or architecture choice, be ready for:\n\nWhat? \u2192 Why? \u2192 Alternatives? \u2192 Trade-off? \u2192 What would you change now?\n\nA strong project explanation isn\u2019t a memorized speech.\nIt\u2019s being able to",
+        "transcript": null,
+        "vision_analysis": null
+    },
+    "media": {
+        "video_path": "reels\\Db564cDMqH-.mp4",
+        "thumbnail_path": "reels\\Db564cDMqH-.jpg",
+        "duration": null
+    },
+    "knowledge": {
+        "title": "Interview Preparation: Structuring Your Answers and Defending Your Decisions",
+        "summary": "Learn how to structure your answers during an interview by using the STAR, PREP, PROBLEM \u2192 APPROACH \u2192 TRADE-OFF, ARCHITECTURE \u2192 FLOW \u2192 FAILURE, OWNERSHIP, and DEFEND YOUR DECISIONS frameworks. This will help you demonstrate your problem-solving skills, technical depth, and decision-making processes.",
+        "main_topic": "Interview Preparation",
+        "difficulty": "Intermediate",
+        "key_concepts": [
+            "STAR framework",
+            "PREP framework",
+            "PROBLEM \u2192 APPROACH \u2192 TRADE-OFF framework",
+            "ARCHITECTURE \u2192 FLOW \u2192 FAILURE",
+            "OWNERSHIP",
+            "DEFEND YOUR DECISIONS"
+        ],
+        "resources": [],
+        "tools": [
+            "VS Code",
+            "Postman",
+            "Cursor"
+        ],
+        "code_snippets": [],
+        "best_practices": [
+            "Keep your answer focused on what you did, not just what you used."
+        ],
+        "mistakes_to_avoid": [
+            "Never claim work you can\u2019t defend technically.",
+            "Don't memorize a speech, but be able to explain your decisions and actions."
+        ],
+        "action_items": [
+            "Practice using the STAR framework",
+            "Review the PREP framework",
+            "Learn about the PROBLEM \u2192 APPROACH \u2192 TRADE-OFF framework",
+            "Understand architecture and technology questions",
+            "Be ready to defend your decisions"
+        ],
+        "tags": [
+            "interview preparation",
+            "STAR framework",
+            "PREP framework",
+            "PROBLEM \u2192 APPROACH \u2192 TRADE-OFF",
+            "architectural design",
+            "system understanding",
+            "technical depth"
+        ],
+        "category": "Programming"
+    },
+    "timestamps": {
+        "reel_created": "20260811",
+        "processed_at": "2026-08-12T20:54:11"
+    }
+}

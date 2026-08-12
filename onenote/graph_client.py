@@ -1,4 +1,5 @@
 import os
+import re
 from html import escape
 
 import msal
@@ -33,6 +34,18 @@ class GraphClient:
         return {
             "Authorization": f"Bearer {self.access_token}"
         }
+
+    def _extract_body_content(self, html_content):
+        match = re.search(
+            r"<body[^>]*>(.*?)</body>",
+            html_content,
+            flags=re.IGNORECASE | re.DOTALL
+        )
+
+        if match:
+            return match.group(1).strip()
+
+        return html_content.strip()
 
     def authenticate(self):
         used_interactive = False
@@ -164,13 +177,15 @@ class GraphClient:
         if self.access_token is None:
             raise Exception("Not authenticated.")
 
-        page_html = f"""
-<html>
+        body_content = self._extract_body_content(html_content)
+        page_html = f"""<!DOCTYPE html>
+<html lang="en-US">
 <head>
     <title>{escape(str(title))}</title>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
 </head>
-<body>
-    {html_content}
+<body data-absolute-enabled="true" style="font-family:Calibri;font-size:11pt">
+{body_content}
 </body>
 </html>
 """
@@ -179,9 +194,9 @@ class GraphClient:
             f"{GRAPH_BASE_URL}/me/onenote/sections/{section_id}/pages",
             headers={
                 **self._headers(),
-                "Content-Type": "text/html"
+                "Content-Type": "application/xhtml+xml; charset=utf-8"
             },
-            data=page_html
+            data=page_html.encode("utf-8")
         )
 
         if response.status_code == 201:

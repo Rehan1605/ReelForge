@@ -1,1 +1,8 @@
 sessions/
+__pycache__/
+*.pyc
+token_cache.bin
+reels/
+preview.html
+*.log
+.env

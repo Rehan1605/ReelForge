@@ -1,6 +1,37 @@
-MICROSOFT_CLIENT_ID = "986acecd-b09b-4544-8f52-43baef9c74f0"
+import os
+from pathlib import Path
 
-BOT_TOKEN = "8704391876:AAHd2TWQiALWblU2gJAOYPtThzwI4c-yW9Q"
+
+def _load_env_file():
+    env_path = Path(".env")
+
+    if not env_path.exists():
+        return
+
+    for line in env_path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+
+        key, value = line.split("=", 1)
+        os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
+
+
+def _required_env(name):
+    value = os.getenv(name)
+
+    if not value:
+        raise RuntimeError(f"Missing required environment variable: {name}")
+
+    return value
+
+
+_load_env_file()
+
+MICROSOFT_CLIENT_ID = _required_env("MICROSOFT_CLIENT_ID")
+
+BOT_TOKEN = _required_env("TELEGRAM_BOT_TOKEN")
 
 FFMPEG_PATH = r"C:\Users\Rehan's Lenovo\AppData\Local\Microsoft\WinGet\Packages\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-8.1.1-full_build\bin"
 

@@ -1,10 +1,13 @@
-import json
 import traceback
 from pathlib import Path
 
 from config import BRAINS_DIR
 from download.downloader import acquire_reel
-from storage.brain_object import update_latest_category, update_latest_knowledge
+from storage.brain_object import (
+    load_latest_brain_object,
+    update_latest_category,
+    update_latest_knowledge,
+)
 
 
 def _notify(progress_callback, message):
@@ -20,10 +23,7 @@ def _latest_brain_path():
 
 
 def _load_latest_brain_object():
-    brain_path = _latest_brain_path()
-
-    with open(brain_path, "r", encoding="utf-8") as f:
-        return json.load(f)
+    return load_latest_brain_object()
 
 
 def process_reel(url, progress_callback=None):
@@ -78,10 +78,26 @@ def process_reel(url, progress_callback=None):
             print("Dispatching extractor...")
             knowledge = dispatch(category, caption, transcript)
             print("Extractor completed.")
-            print(f"Extractor output: {json.dumps(knowledge, indent=4)}")
             print("Updating Brain Object knowledge...")
             brain = update_latest_knowledge(knowledge)
             print("Knowledge updated.")
+
+            brain = _load_latest_brain_object()
+            category = brain.get("knowledge", {}).get("category")
+
+            if not category:
+                print("Warning: Brain Object category missing; skipping OneNote publishing.")
+            else:
+                try:
+                    from onenote.writer import OneNoteWriter
+
+                    _notify(progress_callback, "Publishing to OneNote")
+                    print("Publishing to OneNote...")
+                    writer = OneNoteWriter()
+                    writer.write(brain)
+                    print("✅ OneNote page created successfully.")
+                except Exception as e:
+                    print(f"⚠️ OneNote publishing failed: {e}")
         except Exception as e:
             print(f"Knowledge Extraction Failed: {e}")
             brain = _load_latest_brain_object()

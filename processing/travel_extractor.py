@@ -25,7 +25,6 @@ def extract_travel_knowledge(caption, transcript):
     )
 
     result = response.json()["response"].strip()
-    print(f"Raw extractor response: {result}")
 
     try:
         return json.loads(result)
