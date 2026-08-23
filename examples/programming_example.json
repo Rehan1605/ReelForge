@@ -1,0 +1,66 @@
+{
+  "id": "example_programming",
+  "source": {
+    "url": "https://www.instagram.com/reel/example_coding",
+    "shortcode": "example_coding",
+    "channel": "dev_insights"
+  },
+  "content": {
+    "caption": "Relearning Coding in 2026: 1. Python core syntax 2. Data Structures & Algorithms (LeetCode 75) 3. System Design fundamentals 4. Build real-world fullstack projects.",
+    "transcript": "If I had to relearn coding from scratch in 2026, here is the exact roadmap. Start with Python or JavaScript core concepts. Next, practice data structures and algorithms on LeetCode focusing on arrays, two pointers, and trees. Then build two full-stack projects."
+  },
+  "knowledge": {
+    "category": "Programming",
+    "title": "Roadmap for Relearning Coding in 2026",
+    "summary": "A structured 4-step roadmap for learning programming from scratch focusing on foundational languages, data structures, and practical full-stack projects.",
+    "main_topic": "Software Engineering Learning Roadmap",
+    "difficulty": "Beginner to Intermediate",
+    "key_takeaways": [
+      "Master Python or JavaScript core syntax first.",
+      "Focus on LeetCode 75 for data structures and algorithms.",
+      "Build deployed full-stack applications rather than tutorial clones."
+    ],
+    "key_concepts": [
+      "Core Programming Fundamentals",
+      "Data Structures and Algorithms",
+      "Full-Stack Web Development",
+      "System Design"
+    ],
+    "resources": [
+      "LeetCode 75",
+      "Documentation & Tutorial Roadmaps"
+    ],
+    "tools": [
+      "Python",
+      "JavaScript",
+      "VS Code",
+      "Git"
+    ],
+    "code_snippets": [],
+    "best_practices": [
+      "Consistency over intensity",
+      "Build real projects alongside theoretical study"
+    ],
+    "mistakes_to_avoid": [
+      "Tutorial hell without writing independent code",
+      "Skipping fundamental algorithmic thinking"
+    ],
+    "action_items": [
+      "Complete foundational syntax exercises",
+      "Solve 2 DSA problems daily",
+      "Initialize a GitHub portfolio repository"
+    ],
+    "tags": [
+      "programming",
+      "roadmap",
+      "coding",
+      "dsa",
+      "python"
+    ]
+  },
+  "timestamps": {
+    "reel_created": "2026-02-20",
+    "processed_at": "2026-02-23T20:00:00"
+  },
+  "version": "1.0"
+}

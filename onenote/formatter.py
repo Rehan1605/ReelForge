@@ -128,6 +128,32 @@ def format_to_html(brain: dict) -> str:
     add_list_section(parts, "Action Items", knowledge.get("action_items"))
     add_list_section(parts, "Tags", knowledge.get("tags"))
 
+    handled_keys = {
+        "category",
+        "title",
+        "summary",
+        "main_topic",
+        "difficulty",
+        "key_concepts",
+        "tools",
+        "resources",
+        "best_practices",
+        "mistakes_to_avoid",
+        "action_items",
+        "tags",
+    }
+
+    for key, value in knowledge.items():
+        if key in handled_keys or not value:
+            continue
+
+        heading = key.replace("_", " ").title()
+
+        if isinstance(value, list):
+            add_list_section(parts, heading, value)
+        elif isinstance(value, str):
+            add_text_section(parts, heading, value)
+
     parts.append("</body>")
     parts.append("</html>")
 

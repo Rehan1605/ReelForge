@@ -1,0 +1,62 @@
+{
+  "id": "example_food",
+  "source": {
+    "url": "https://www.instagram.com/reel/example_recipe",
+    "shortcode": "example_recipe",
+    "channel": "culinary_delights"
+  },
+  "content": {
+    "caption": "Crispy Garlic Butter Toast: 4 thick slices bread, 3 tbsp softened butter, 4 cloves minced garlic, 1 tbsp chopped parsley, pinch of salt. Bake at 200°C for 10 mins!",
+    "transcript": "Let's make the crispiest garlic butter bread toast. Mix softened butter with freshly minced garlic, chopped parsley, and a pinch of salt. Spread generously on crusty bread and bake at 200 degrees Celsius for 10 minutes until golden."
+  },
+  "knowledge": {
+    "category": "Food",
+    "title": "Crispy Garlic Butter Toast Recipe",
+    "summary": "Quick and flavorful recipe for making crispy garlic butter toast baked to golden perfection.",
+    "dishes": [
+      "Garlic Butter Toast"
+    ],
+    "ingredients": [
+      "4 slices crusty bread",
+      "3 tbsp softened butter",
+      "4 cloves minced garlic",
+      "1 tbsp chopped fresh parsley",
+      "1 pinch sea salt"
+    ],
+    "steps": [
+      "In a small bowl, combine softened butter, minced garlic, parsley, and salt.",
+      "Spread the garlic butter mixture evenly over the bread slices.",
+      "Preheat the oven to 200°C (400°F).",
+      "Bake for 8 to 10 minutes until crisp and golden brown around the edges."
+    ],
+    "cookware": [
+      "Baking tray",
+      "Oven",
+      "Mixing bowl"
+    ],
+    "cuisine": "Continental",
+    "measurements": [
+      "4 slices",
+      "3 tbsp",
+      "4 cloves",
+      "1 tbsp",
+      "200°C"
+    ],
+    "tips": [
+      "Use room temperature butter for easy spreading without tearing the bread.",
+      "Broil for the last 1 minute for extra crispness."
+    ],
+    "websites": [],
+    "tags": [
+      "food",
+      "recipe",
+      "garlicbread",
+      "quickmeals"
+    ]
+  },
+  "timestamps": {
+    "reel_created": "2026-02-20",
+    "processed_at": "2026-02-23T20:00:00"
+  },
+  "version": "1.0"
+}

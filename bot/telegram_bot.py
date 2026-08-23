@@ -1,4 +1,10 @@
 import asyncio
+import sys
+from pathlib import Path
+
+ROOT_DIR = Path(__file__).resolve().parent.parent
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
 
 from telegram import Update
 from telegram.ext import (
@@ -69,7 +75,7 @@ def _format_summary(result):
         "InstaBrain Summary\n\n"
         f"Title: {title}\n\n"
         f"Summary:\n{summary}\n\n"
-        f"Main Topic:\n{category}\n\n"
+        f"Category:\n{category}\n\n"
         f"Key Takeaways:\n{_list_items(key_takeaways)}\n\n"
         f"Resources:\n{_list_items(resources)}\n\n"
         f"Action Items:\n{_list_items(action_items)}"
@@ -102,19 +108,29 @@ async def receive(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if not result["success"]:
         await update.message.reply_text(
-            f"Reel processing failed: {result['error']}"
+            f"❌ Reel processing failed: {result.get('error', 'Unknown error')}"
         )
         return
 
-    await update.message.reply_text(_format_summary(result))
+    onenote_success = result.get("onenote_success", False)
+    onenote_error = result.get("onenote_error")
+    category = result.get("category") or "Unknown"
+
+    if onenote_success:
+        status_line = f"✅ OneNote Page Created in Section: {category}\n\n"
+    else:
+        status_line = f"⚠️ Saved to Brain Object, but OneNote publishing failed: {onenote_error}\n\n"
+
+    summary_text = status_line + _format_summary(result)
+    await update.message.reply_text(summary_text)
 
     brain_path = result.get("brain_path")
 
-    if brain_path is not None:
+    if brain_path is not None and Path(brain_path).exists():
         with open(brain_path, "rb") as f:
             await update.message.reply_document(
                 document=f,
-                filename=brain_path.name
+                filename=Path(brain_path).name
             )
 
 
@@ -133,6 +149,7 @@ def run_bot():
     print("InstaBrain Bot Running...")
 
     app.run_polling()
+
 
 if __name__ == "__main__":
     run_bot()

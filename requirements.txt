@@ -1,0 +1,5 @@
+openai-whisper
+yt-dlp
+requests
+msal
+python-telegram-bot>=20.0

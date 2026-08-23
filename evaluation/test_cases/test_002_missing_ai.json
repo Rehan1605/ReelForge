@@ -1,0 +1,43 @@
+{
+  "reel_id": "test_002_missing_ai",
+  "expected_category": "AI",
+  "caption": "The other Tools as mentioned in the video:\n\nJules — Autonomous coding agent that fixes bugs, writes tests, and clears your GitHub backlog on its own.\n\nGoogle Opal — Drag-and-drop builder that turns plain text prompts into working mini-apps and workflows.\n\nMixboard — AI whiteboard for brainstorming and mood boards, images and text on one canvas.\n\nGoogle Pomelli — Scans your brand and generates on-brand social posts and ad creatives automatically.\n\nAntiGravity — Google's agent-first coding IDE. Plans, writes, and fixes code across your whole project.\n\nStitch — Turns prompts into complete frontend UI designs and code.\n\nFirebase Studio — Cloud dev environment that builds and deploys full-stack apps from a prompt.\n\nCode Wiki — Turns your codebase into an interactive, searchable wiki.\n\nGemini Notebook — Source-grounded research assistant. Answers questions and builds study material from your own documents.\n\nDisco — Turns your open browser tabs into custom AI-generated apps.\n\nDoppl — Try on any outfit virtually using just a photo.\n\nLearn Your Way — Turns notes and PDFs into personalized quizzes and study sessions.\n\nWhisk — Remixes your own images into new AI-generated visuals.\n\nGoogle AI Studio — Google's playground for building and testing apps with Gemini models.\n\nGoogle Illuminate — Turns research papers into AI-generated audio summaries.\n\nHope it helps :)",
+  "transcript": null,
+  "brain_object": {
+    "knowledge": {
+      "title": "AI Tools Mentioned in the Reel",
+      "summary": "A list of AI tools and the capabilities described for each, including coding, app building, design, research, productivity, and image-generation tools.",
+      "tools": [
+        "Jules",
+        "Google Opal",
+        "Mixboard",
+        "Google Pomelli",
+        "AntiGravity",
+        "Stitch",
+        "Firebase Studio",
+        "Code Wiki",
+        "Gemini Notebook",
+        "Disco"
+      ],
+      "use_cases": [
+        "Autonomous coding agent that fixes bugs, writes tests, and clears your GitHub backlog on its own",
+        "Drag-and-drop builder that turns plain text prompts into working mini-apps and workflows",
+        "AI whiteboard for brainstorming and mood boards, images and text on one canvas",
+        "Scans your brand and generates on-brand social posts and ad creatives automatically",
+        "Agent-first coding IDE that plans, writes, and fixes code across your whole project",
+        "Turns prompts into complete frontend UI designs and code",
+        "Cloud dev environment that builds and deploys full-stack apps from a prompt",
+        "Turns your codebase into an interactive, searchable wiki",
+        "Source-grounded research assistant that answers questions and builds study material from your own documents",
+        "Turns open browser tabs into custom AI-generated apps"
+      ],
+      "websites": [],
+      "prompts": [],
+      "models": [],
+      "concepts": [],
+      "tips": [],
+      "category": "AI"
+    }
+  },
+  "test_purpose": "Completeness trap: the last five explicitly mentioned tools/use cases were removed."
+}

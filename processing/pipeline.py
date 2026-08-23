@@ -60,13 +60,15 @@ def process_reel(url, progress_callback=None):
         except Exception as e:
             print(f"Categorization Failed: {e}")
             return {
-                "success": True,
+                "success": False,
+                "onenote_success": False,
+                "onenote_error": None,
                 "brain": _load_latest_brain_object(),
                 "brain_path": _latest_brain_path(),
                 "transcript": transcript,
                 "category": None,
                 "knowledge": None,
-                "error": str(e),
+                "error": f"Categorization Failed: {e}",
             }
 
         from processing.dispatcher import dispatch
@@ -81,33 +83,55 @@ def process_reel(url, progress_callback=None):
             print("Updating Brain Object knowledge...")
             brain = update_latest_knowledge(knowledge)
             print("Knowledge updated.")
-
-            brain = _load_latest_brain_object()
-            category = brain.get("knowledge", {}).get("category")
-
-            if not category:
-                print("Warning: Brain Object category missing; skipping OneNote publishing.")
-            else:
-                try:
-                    from onenote.writer import OneNoteWriter
-
-                    _notify(progress_callback, "Publishing to OneNote")
-                    print("Publishing to OneNote...")
-                    writer = OneNoteWriter()
-                    writer.write(brain)
-                    print("✅ OneNote page created successfully.")
-                except Exception as e:
-                    print(f"⚠️ OneNote publishing failed: {e}")
         except Exception as e:
             print(f"Knowledge Extraction Failed: {e}")
-            brain = _load_latest_brain_object()
+            return {
+                "success": False,
+                "onenote_success": False,
+                "onenote_error": None,
+                "brain": _load_latest_brain_object(),
+                "brain_path": _latest_brain_path(),
+                "transcript": transcript,
+                "category": category,
+                "knowledge": None,
+                "error": f"Knowledge Extraction Failed: {e}",
+            }
+
+        brain = _load_latest_brain_object()
+        category = brain.get("knowledge", {}).get("category")
+
+        onenote_success = False
+        onenote_error = None
+
+        if not category:
+            print("Warning: Brain Object category missing; skipping OneNote publishing.")
+            onenote_error = "Brain Object category missing"
+        else:
+            try:
+                from onenote.writer import OneNoteWriter
+
+                _notify(progress_callback, "Publishing to OneNote")
+                print("Publishing to OneNote...")
+                writer = OneNoteWriter()
+                writer.write(brain)
+                onenote_success = True
+                print("✅ OneNote page created successfully.")
+            except Exception as e:
+                onenote_success = False
+                onenote_error = str(e)
+                print(f"⚠️ OneNote publishing failed: {e}")
 
         brain_path = _latest_brain_path()
 
-        print("Pipeline completed successfully.")
+        if onenote_success:
+            print("✅ Pipeline completed successfully (OneNote published).")
+        else:
+            print(f"⚠️ Pipeline completed extraction, but OneNote failed: {onenote_error}")
 
         return {
             "success": True,
+            "onenote_success": onenote_success,
+            "onenote_error": onenote_error,
             "brain": brain,
             "brain_path": brain_path,
             "transcript": transcript,
@@ -121,6 +145,8 @@ def process_reel(url, progress_callback=None):
         print(f"Pipeline Failed: {e}")
         return {
             "success": False,
+            "onenote_success": False,
+            "onenote_error": None,
             "brain": None,
             "brain_path": None,
             "transcript": None,

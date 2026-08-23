@@ -18,8 +18,8 @@ def _strip_fences(text):
     return text
 
 
-def extract_finance_knowledge(caption, transcript):
-    prompt_path = Path("prompts") / "finance_extractor.txt"
+def extract_other_knowledge(caption, transcript):
+    prompt_path = Path("prompts") / "other_extractor.txt"
 
     prompt = prompt_path.read_text(encoding="utf-8")
 
@@ -44,4 +44,4 @@ def extract_finance_knowledge(caption, transcript):
     try:
         return json.loads(result)
     except json.JSONDecodeError as e:
-        raise ValueError("Finance extractor returned invalid JSON.") from e
+        raise ValueError("Other extractor returned invalid JSON.") from e

@@ -1,8 +1,21 @@
 import json
+import re
 import requests
 from pathlib import Path
 
 from config import TEXT_MODEL
+
+
+def _strip_fences(text):
+    """
+    Remove markdown code fences if the model wrapped the JSON output.
+    Handles ```json ... ```, ``` ... ```, and surrounding whitespace.
+    """
+    text = text.strip()
+    match = re.match(r"^```(?:json)?\s*([\s\S]*?)\s*```$", text, re.IGNORECASE)
+    if match:
+        return match.group(1).strip()
+    return text
 
 
 def extract_movies_edits_knowledge(caption, transcript):
@@ -10,9 +23,11 @@ def extract_movies_edits_knowledge(caption, transcript):
 
     prompt = prompt_path.read_text(encoding="utf-8")
 
-    prompt = prompt.format(
-        caption=caption,
-        transcript=transcript
+    prompt = (
+        prompt.replace("{{", "{")
+        .replace("}}", "}")
+        .replace("{caption}", caption or "")
+        .replace("{transcript}", transcript or "")
     )
 
     response = requests.post(
@@ -24,7 +39,7 @@ def extract_movies_edits_knowledge(caption, transcript):
         }
     )
 
-    result = response.json()["response"].strip()
+    result = _strip_fences(response.json()["response"])
 
     try:
         return json.loads(result)

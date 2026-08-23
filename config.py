@@ -33,9 +33,12 @@ MICROSOFT_CLIENT_ID = _required_env("MICROSOFT_CLIENT_ID")
 
 BOT_TOKEN = _required_env("TELEGRAM_BOT_TOKEN")
 
-FFMPEG_PATH = r"C:\Users\Rehan's Lenovo\AppData\Local\Microsoft\WinGet\Packages\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-8.1.1-full_build\bin"
+FFMPEG_PATH = os.getenv(
+    "FFMPEG_PATH",
+    r"C:\Users\Rehan's Lenovo\AppData\Local\Microsoft\WinGet\Packages\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-8.1.1-full_build\bin",
+)
 
-TEXT_MODEL = "llama3.2:latest"
+TEXT_MODEL = "qwen2.5:7b-instruct"
 VISION_MODEL = "llama3.2-vision:latest"
 
 WORKSPACE_DIR = "reels"

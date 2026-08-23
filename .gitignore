@@ -6,3 +6,5 @@ reels/
 preview.html
 *.log
 .env
+*.zip
+brains/

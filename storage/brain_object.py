@@ -142,8 +142,12 @@ def update_latest_knowledge(knowledge: dict):
     with open(brain_path, "r", encoding="utf-8") as f:
         brain = json.load(f)
 
-    if not any(knowledge.values()):
-        print("Extractor output was empty; keeping existing Brain Object knowledge.")
+    # Treat None or a completely empty dict {} as "no extraction was performed".
+    # A dict that has keys — even if all values are empty strings or empty lists —
+    # is a valid extractor result (e.g. an Other reel with no useful fields) and
+    # must still be persisted so OneNote publishing is not silently skipped.
+    if not knowledge:
+        print("Extractor returned no output; keeping existing Brain Object knowledge.")
         return brain
 
     existing_category = brain["knowledge"].get("category")
