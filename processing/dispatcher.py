@@ -25,7 +25,7 @@ _EXTRACTORS = {
 }
 
 
-def dispatch(category, caption, transcript):
+def dispatch(category, caption, transcript, vision_analysis=None):
     normalized_category = category.strip()
 
     extractor = _EXTRACTORS.get(normalized_category)
@@ -37,4 +37,4 @@ def dispatch(category, caption, transcript):
         )
 
     print(f"Using extractor: {normalized_category}")
-    return extractor(caption, transcript)
+    return extractor(caption, transcript, vision_analysis=vision_analysis)

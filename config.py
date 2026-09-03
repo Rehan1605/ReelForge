@@ -38,8 +38,11 @@ FFMPEG_PATH = os.getenv(
     r"C:\Users\Rehan's Lenovo\AppData\Local\Microsoft\WinGet\Packages\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-8.1.1-full_build\bin",
 )
 
-TEXT_MODEL = "qwen2.5:7b-instruct"
-VISION_MODEL = "llama3.2-vision:latest"
+TEXT_MODEL = os.getenv("TEXT_MODEL", "qwen2.5:7b-instruct")
+VISION_MODEL = os.getenv("VISION_MODEL", "llama3.2-vision:latest")
+OMNIROUTE_BASE_URL = os.getenv("OMNIROUTE_BASE_URL", os.getenv("OPENAI_BASE_URL", "http://localhost:20128/v1"))
+OMNIROUTE_API_KEY = os.getenv("OMNIROUTE_API_KEY", os.getenv("OPENAI_API_KEY", "")).strip()
+VISION_MAX_FRAMES = int(os.getenv("VISION_MAX_FRAMES", "8"))
 
 WORKSPACE_DIR = "reels"
 

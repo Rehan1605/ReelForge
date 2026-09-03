@@ -1,47 +1,25 @@
-import json
-import re
-import requests
 from pathlib import Path
 
-from config import TEXT_MODEL
+from processing.llm_client import generate_json
+from processing.vision_analyzer import format_vision_analysis
 
 
-def _strip_fences(text):
-    """
-    Remove markdown code fences if the model wrapped the JSON output.
-    Handles ```json ... ```, ``` ... ```, and surrounding whitespace.
-    """
-    text = text.strip()
-    match = re.match(r"^```(?:json)?\s*([\s\S]*?)\s*```$", text, re.IGNORECASE)
-    if match:
-        return match.group(1).strip()
-    return text
-
-
-def extract_movies_edits_knowledge(caption, transcript):
+def extract_movies_edits_knowledge(caption, transcript, vision_analysis=None):
     prompt_path = Path("prompts") / "movies_edits_extractor.txt"
 
     prompt = prompt_path.read_text(encoding="utf-8")
+
+    formatted_vision = format_vision_analysis(vision_analysis)
 
     prompt = (
         prompt.replace("{{", "{")
         .replace("}}", "}")
         .replace("{caption}", caption or "")
         .replace("{transcript}", transcript or "")
+        .replace("{vision_analysis}", formatted_vision)
     )
-
-    response = requests.post(
-        "http://localhost:11434/api/generate",
-        json={
-            "model": TEXT_MODEL,
-            "prompt": prompt,
-            "stream": False
-        }
-    )
-
-    result = _strip_fences(response.json()["response"])
 
     try:
-        return json.loads(result)
-    except json.JSONDecodeError as e:
+        return generate_json(prompt)
+    except ValueError as e:
         raise ValueError("Movies & Edits extractor returned invalid JSON.") from e

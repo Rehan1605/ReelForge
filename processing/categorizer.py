@@ -1,7 +1,7 @@
-import requests
 from pathlib import Path
 
-from config import TEXT_MODEL, CATEGORIES
+from config import CATEGORIES
+from processing.llm_client import generate_text
 
 # Build a lookup map for fast case-insensitive normalization.
 # Keys are lowercase versions of each valid category name.
@@ -59,16 +59,7 @@ def categorize(caption, transcript):
     if "{categories}" in prompt:
         prompt = prompt.replace("{categories}", categories)
 
-    response = requests.post(
-        "http://localhost:11434/api/generate",
-        json={
-            "model": TEXT_MODEL,
-            "prompt": prompt,
-            "stream": False
-        }
-    )
-
-    raw_category = response.json()["response"]
+    raw_category = generate_text(prompt)
     category = _normalize_category(raw_category)
 
     return category

@@ -166,6 +166,33 @@ def update_latest_knowledge(knowledge: dict):
 def update_latest_programming_knowledge(knowledge):
     return update_latest_knowledge(knowledge)
 
+
+def update_vision_analysis(reel_id, vision_analysis: dict):
+    brain_path = Path(BRAINS_DIR) / f"{reel_id}.json"
+
+    with open(brain_path, "r", encoding="utf-8") as f:
+        brain = json.load(f)
+
+    if "content" not in brain:
+        brain["content"] = {}
+
+    brain["content"]["vision_analysis"] = vision_analysis
+
+    with open(brain_path, "w", encoding="utf-8") as f:
+        json.dump(brain, f, indent=4)
+
+    return brain
+
+
+def update_latest_vision_analysis(vision_analysis: dict):
+    brain_path = max(
+        Path(BRAINS_DIR).glob("*.json"),
+        key=lambda f: f.stat().st_mtime
+    )
+
+    return update_vision_analysis(brain_path.stem, vision_analysis)
+
+
 def load_latest_brain_object():
     """
     Load the most recently created Brain Object.

@@ -2,7 +2,7 @@
 
 > Turn Instagram Reels into structured, category-specific knowledge and automatically publish clean notes to Microsoft OneNote.
 
-ReelForge is an automated pipeline that extracts actionable intelligence from short-form video content. When you send an Instagram Reel URL to the ReelForge Telegram bot, it downloads the video, transcribes the audio, classifies the content into one of 10 distinct domains, extracts structured metadata, and organizes it into dedicated sections in Microsoft OneNote.
+ReelForge is an automated pipeline that extracts actionable intelligence from short-form video content. When you send an Instagram Reel URL to the ReelForge Telegram bot, it downloads the video, transcribes the audio, samples and analyzes visual video frames, classifies the content into one of 10 distinct domains, extracts structured multimodal metadata, and organizes it into dedicated sections in Microsoft OneNote.
 
 ---
 
@@ -13,11 +13,12 @@ Short-form videos are packed with high-value knowledge—coding roadmaps, recipe
 ReelForge bridges this gap:
 
 1. **Ingests** an Instagram Reel via Telegram or CLI.
-2. **Extracts** audio and generates accurate local transcriptions with Whisper.
-3. **Classifies** the content using local LLM inference (**Qwen 2.5 7B**).
-4. **Extracts domain-specific schemas** (e.g. ingredients & steps for food; exercises & muscle groups for gym; tools & code for programming).
-5. **Constructs a Structured Brain Object** (persisted locally as JSON).
-6. **Publishes** a formatted, styled page directly into the appropriate OneNote notebook section via Microsoft Graph API.
+2. **Transcribes** audio offline using local OpenAI Whisper.
+3. **Analyzes visual frames** (on-screen text, visible objects, steps, tools, and actions) via OmniRoute (`VISION_MODEL`).
+4. **Classifies** the content domain using OmniRoute (`TEXT_MODEL`).
+5. **Extracts domain-specific structured knowledge** combining caption, transcript, and visual observations.
+6. **Constructs a Structured Brain Object** (persisted locally as JSON).
+7. **Publishes** a formatted, styled page directly into the appropriate OneNote notebook section via Microsoft Graph API.
 
 ---
 
@@ -45,36 +46,54 @@ ReelForge routes each reel to a custom extractor tailored for its specific domai
 ```text
 Instagram Reel URL
         │
-        ▼
-   [Telegram Bot]
+        ├──────────────► Local Whisper (Offline Audio)
+        │                    │
+        │                    ▼
+        │                Transcript
         │
-        ▼
-  [Downloader] ──────▶ Audio extraction (yt-dlp)
-        │
-        ▼
-  [Transcriber] ─────▶ Local Whisper transcription
-        │
-        ▼
-  [Categorizer] ─────▶ Qwen 2.5 7B (10-category classification)
-        │
-        ▼
-   [Dispatcher] ─────▶ Domain-specific prompt extractor
-        │
-        ▼
-  [Brain Object] ────▶ Validated JSON metadata schema
-        │
-        ▼
- [Title Sanitizer] ──▶ Microsoft Graph character sanitization
-        │
-        ▼
-[OneNote Publisher] ─▶ Microsoft Graph API (Category Section)
+        └──────────────► Vision Analyzer (Frame Sampling)
+                             │
+                             ▼
+                         OmniRoute Gateway
+                             │
+                        VISION_MODEL
+                             │
+                             ▼
+                      Vision Analysis
+                             │
+Caption + Transcript + Vision Analysis
+                             │
+                             ▼
+                       Categorizer
+                             │
+                             ▼
+                      llm_client.py
+                             │
+                             ▼
+                         OmniRoute Gateway
+                             │
+                        TEXT_MODEL
+                             │
+                             ▼
+                   Category Extractor
+                             │
+                             ▼
+                      Knowledge JSON
+                             │
+                             ▼
+                       Brain Object
+                             │
+                             ▼
+                    OneNote Publisher (Microsoft Graph API)
 ```
 
 ---
 
 ## Key Features
 
-* **Zero-Cloud LLM Cost**: Powered entirely by local inference via Ollama (`qwen2.5:7b-instruct`).
+* **Provider-Independent AI Architecture**: Routes production text and vision LLM calls through an OpenAI-compatible OmniRoute gateway (`http://localhost:20128/v1`), supporting local inference nodes or free-tier cloud providers with zero code changes.
+* **Multimodal Evidence Extraction**: Fuses speech transcripts, video captions, and visual frame observations (on-screen text, ingredients/tools, demonstration steps, code/settings) into domain knowledge extraction.
+* **100% Local Speech Transcription**: Audio transcription runs completely offline on device via OpenAI Whisper.
 * **High-Fidelity Categorization**: Context-aware prompt design enforcing the dominant-purpose rule with explicit negative boundary conditions.
 * **Domain-Specific Schema Extraction**: Extracts structured fields rather than generic text summaries.
 * **Graph API Error Handling & Title Sanitization**: Automatically normalizes colons, slashes, and reserved Microsoft Graph characters to prevent Error 20153 rejections.
@@ -88,8 +107,8 @@ Instagram Reel URL
 ### System Requirements
 * **Operating System**: Windows 10/11, macOS, or Linux
 * **Python**: Version 3.10 or higher
-* **Ollama**: Installed and running locally ([ollama.ai](https://ollama.ai))
-* **FFmpeg**: Required for audio extraction and transcription
+* **OmniRoute**: Installed and running locally as LLM gateway ([omniroute](https://github.com/djprawns/omniroute))
+* **FFmpeg**: Required for audio extraction, transcription, and video frame sampling
 
 ### External Accounts & Tokens
 1. **Telegram Bot Token**: Created via [@BotFather](https://t.me/botfather).
@@ -121,11 +140,10 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 4. Install & Prepare Local Models
-Ensure Ollama is running, then pull the production models:
+### 4. Start OmniRoute Gateway
+Ensure OmniRoute is running locally:
 ```bash
-# Pull production categorization and extraction model
-ollama pull qwen2.5:7b-instruct
+omniroute serve
 ```
 
 ### 5. Install FFmpeg
@@ -156,10 +174,20 @@ Edit `.env`:
 ```env
 TELEGRAM_BOT_TOKEN=your_telegram_bot_token_here
 MICROSOFT_CLIENT_ID=your_microsoft_azure_app_client_id_here
+OMNIROUTE_BASE_URL=http://localhost:20128/v1
+OMNIROUTE_API_KEY=your_optional_omniroute_key
+TEXT_MODEL=gemini/gemini-3.1-flash-lite
+VISION_MODEL=gemini/gemini-3.1-flash-lite
+VISION_MAX_FRAMES=8
 ```
 
-### Optional Environment Variables:
-* `FFMPEG_PATH`: Explicit path to FFmpeg `bin/` directory (if not present in system PATH).
+### Environment Variables Reference:
+* `OMNIROUTE_BASE_URL`: OpenAI-compatible endpoint URL for OmniRoute (default: `http://localhost:20128/v1`).
+* `OMNIROUTE_API_KEY`: Optional Bearer token for OmniRoute gateway.
+* `TEXT_MODEL`: Model identifier for text categorization and knowledge extraction.
+* `VISION_MODEL`: Model identifier for visual frame analysis.
+* `VISION_MAX_FRAMES`: Maximum representative video frames sampled per reel (default: `8`).
+* `FFMPEG_PATH`: Optional explicit path to FFmpeg `bin/` directory (if not present in system PATH).
 
 ---
 
@@ -207,7 +235,9 @@ ReelForge/
 ├── processing/
 │   ├── __init__.py
 │   ├── pipeline.py               # End-to-end orchestration pipeline
-│   ├── categorizer.py            # Qwen 2.5 7B categorization engine
+│   ├── llm_client.py             # Centralized OpenAI-compatible text LLM client
+│   ├── vision_analyzer.py        # FFmpeg frame sampling & OmniRoute vision analyzer
+│   ├── categorizer.py            # Category classification engine
 │   ├── dispatcher.py             # Route category to specific extractor
 │   ├── transcriber.py            # Whisper audio transcription
 │   ├── ai_extractor.py           # AI category extractor
@@ -220,8 +250,9 @@ ReelForge/
 │   ├── productivity_extractor.py # Productivity extractor
 │   ├── programming_extractor.py  # Programming extractor
 │   └── travel_extractor.py       # Travel extractor
-├── prompts/                      # 11 production system prompts
+├── prompts/                      # 12 production system prompts
 │   ├── categorizer.txt
+│   ├── vision_analyzer.txt
 │   └── *_extractor.txt
 ├── storage/
 │   ├── __init__.py
@@ -259,7 +290,7 @@ The `evaluation/` directory contains an experimental, evidence-first evaluation 
 
 ## Limitations & Accuracy
 
-* **Classification Accuracy**: In a controlled 28-reel representative regression benchmark spanning all 10 categories, `qwen2.5:7b-instruct` achieved 100% (28/28) accuracy. While highly accurate, edge-case reels with minimal speech and ambiguous captions may occasionally default to `Other`.
+* **Classification & Extraction Accuracy**: In controlled multi-category benchmarks, the prompt design achieves robust category classification. While highly accurate, edge-case reels with minimal speech and ambiguous captions may occasionally default to `Other`.
 * **Private Reels**: Reels from private accounts or age-restricted content cannot be retrieved without authenticated Instagram sessions.
 * **Audio Quality**: Background music or heavily distorted audio can impact transcription precision.
 

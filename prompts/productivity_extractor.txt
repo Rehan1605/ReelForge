@@ -202,3 +202,6 @@ Caption:
 
 Transcript:
 {transcript}
+
+Visual Observations:
+{vision_analysis}

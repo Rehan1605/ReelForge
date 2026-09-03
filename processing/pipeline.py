@@ -46,6 +46,7 @@ def process_reel(url, progress_callback=None):
         brain = _load_latest_brain_object()
         print("Brain Object loaded.")
         caption = brain.get("content", {}).get("caption", "") or ""
+        vision_analysis = brain.get("content", {}).get("vision_analysis")
 
         from processing.categorizer import categorize
 
@@ -78,7 +79,7 @@ def process_reel(url, progress_callback=None):
         try:
             _notify(progress_callback, "Extracting Knowledge")
             print("Dispatching extractor...")
-            knowledge = dispatch(category, caption, transcript)
+            knowledge = dispatch(category, caption, transcript, vision_analysis=vision_analysis)
             print("Extractor completed.")
             print("Updating Brain Object knowledge...")
             brain = update_latest_knowledge(knowledge)

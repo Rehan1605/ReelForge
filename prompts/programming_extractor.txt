@@ -204,4 +204,7 @@ Caption:
 {caption}
 
 Transcript:
-{transcript}  
+{transcript}
+
+Visual Observations:
+{vision_analysis}
