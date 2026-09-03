@@ -30,7 +30,6 @@ def _required_env(name):
 _load_env_file()
 
 MICROSOFT_CLIENT_ID = _required_env("MICROSOFT_CLIENT_ID")
-
 BOT_TOKEN = _required_env("TELEGRAM_BOT_TOKEN")
 
 FFMPEG_PATH = os.getenv(
@@ -39,16 +38,16 @@ FFMPEG_PATH = os.getenv(
 )
 
 TEXT_MODEL = "qwen2.5:7b-instruct"
-VISION_MODEL = "llama3.2-vision:latest"
+
+# V2 AI gateway settings. OmniRoute exposes an OpenAI-compatible API locally.
+OMNIROUTE_BASE_URL = os.getenv("OMNIROUTE_BASE_URL", "http://localhost:20128/v1")
+VISION_MODEL = os.getenv("VISION_MODEL", "google/gemini-2.5-flash-lite:free")
+VISION_MAX_FRAMES = int(os.getenv("VISION_MAX_FRAMES", "12"))
 
 WORKSPACE_DIR = "reels"
-
 BRAINS_DIR = "brains"
-
 KEEP_VIDEOS = False
-
 WHISPER_MODEL = "base"
-
 OLLAMA_MODEL = "llama3.2-vision"
 
 CATEGORIES = [
