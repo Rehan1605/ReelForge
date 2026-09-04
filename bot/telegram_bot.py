@@ -116,11 +116,14 @@ async def receive(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
+    is_cached = result.get("cached", False)
     onenote_success = result.get("onenote_success", False)
     onenote_error = result.get("onenote_error")
     category = result.get("category") or "Unknown"
 
-    if onenote_success:
+    if is_cached:
+        status_line = f"⚡ Already Processed (Cached Brain Object)\n✅ OneNote Section: {category}\n\n"
+    elif onenote_success:
         status_line = f"✅ OneNote Page Created in Section: {category}\n\n"
     else:
         status_line = f"⚠️ Saved to Brain Object, but OneNote publishing failed: {onenote_error}\n\n"

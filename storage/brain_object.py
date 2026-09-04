@@ -4,7 +4,36 @@ import tempfile
 from datetime import datetime
 from pathlib import Path
 
-from config import BRAINS_DIR, WORKSPACE_DIR
+from config import BRAINS_DIR, CATEGORIES, WORKSPACE_DIR
+
+
+def extract_reel_id_from_url(url: str) -> str | None:
+    """
+    Extract the canonical Instagram reel shortcode/ID from a URL without downloading.
+    Handles standard URL formats:
+      - https://www.instagram.com/reel/SHORTCODE/
+      - https://www.instagram.com/reels/SHORTCODE/
+      - https://www.instagram.com/p/SHORTCODE/
+      - https://www.instagram.com/share/reel/SHORTCODE/
+      - URLs with query params, trailing slashes, or whitespace.
+    """
+    if not url or not isinstance(url, str):
+        return None
+    cleaned = url.strip()
+    path = cleaned.split("?")[0].split("#")[0].strip("/")
+    parts = [p for p in path.split("/") if p]
+    if not parts:
+        return None
+
+    for marker in ("reel", "reels", "p", "tv"):
+        if marker in parts:
+            idx = parts.index(marker)
+            if idx + 1 < len(parts):
+                candidate = parts[idx + 1]
+                if candidate:
+                    return candidate
+
+    return parts[-1] if parts else None
 
 
 def _latest_file(pattern):
@@ -29,12 +58,76 @@ def _latest_thumbnail():
 
 def _shortcode_from_metadata(source_url, metadata):
     webpage_url = metadata.get("webpage_url") or source_url
+    extracted = extract_reel_id_from_url(webpage_url)
+    if extracted:
+        return extracted
+
     parts = [p for p in webpage_url.strip("/").split("/") if p]
 
     if parts:
         return parts[-1]
 
     return metadata.get("id")
+
+
+def is_valid_brain_object(brain: dict | None, expected_reel_id: str | None = None) -> bool:
+    """
+    Check if a Brain Object represents a fully completed, valid knowledge extraction.
+    Must have matching reel_id, valid category, non-empty summary, and valid schema.
+    """
+    if not isinstance(brain, dict):
+        return False
+
+    reel_id = brain.get("id")
+    if not reel_id or not isinstance(reel_id, str):
+        return False
+
+    if expected_reel_id is not None and reel_id != expected_reel_id:
+        return False
+
+    knowledge = brain.get("knowledge")
+    if not isinstance(knowledge, dict):
+        return False
+
+    category = knowledge.get("category")
+    if not category or category not in CATEGORIES:
+        return False
+
+    summary = knowledge.get("summary")
+    if not summary or not isinstance(summary, str) or not summary.strip():
+        return False
+
+    try:
+        from processing.knowledge_schema import normalize_knowledge_schema
+        normalize_knowledge_schema(category, knowledge)
+    except Exception:
+        return False
+
+    return True
+
+
+def get_cached_brain_object(reel_id: str) -> dict | None:
+    """
+    Retrieve an existing Brain Object by reel_id if it is fully valid and completed.
+    Returns the loaded dict on cache hit, or None on cache miss / partial / malformed.
+    """
+    if not reel_id or not isinstance(reel_id, str):
+        return None
+
+    brain_path = Path(BRAINS_DIR) / f"{reel_id}.json"
+    if not brain_path.is_file():
+        return None
+
+    try:
+        with open(brain_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except Exception:
+        return None
+
+    if is_valid_brain_object(data, expected_reel_id=reel_id):
+        return data
+
+    return None
 
 
 def _atomic_write_json(file_path: Path, data: dict):

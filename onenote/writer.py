@@ -1,3 +1,4 @@
+import os
 from onenote.formatter import format_brain_object
 from onenote.graph_client import GraphClient
 from onenote.sanitizer import sanitize_page_title
@@ -52,10 +53,17 @@ class OneNoteWriter:
         category = brain["knowledge"]["category"]
         title = self._page_title(brain)
         section = self.get_section_for_category(category)
-        html_content = format_brain_object(brain)
+
+        # Check for local thumbnail file
+        media = brain.get("media") or {}
+        thumbnail_path = media.get("thumbnail_path")
+        has_thumbnail = bool(thumbnail_path and os.path.isfile(thumbnail_path) and os.path.getsize(thumbnail_path) > 0)
+
+        html_content = format_brain_object(brain, include_thumbnail=has_thumbnail)
 
         return self.client.create_page(
             section["id"],
             title,
-            html_content
+            html_content,
+            thumbnail_path=thumbnail_path if has_thumbnail else None,
         )

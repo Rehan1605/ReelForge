@@ -12,9 +12,12 @@ def main():
     result = process_reel(url)
 
     if result["success"]:
-        print("Reel processed successfully.")
+        if result.get("cached"):
+            print(f"[OK] Reel '{result.get('brain', {}).get('id')}' was already processed (returned cached Brain Object).")
+        else:
+            print("Reel processed successfully.")
     else:
-        print("Reel processing failed.")
+        print(f"Reel processing failed: {result.get('error', 'Unknown error')}")
 
 
 if __name__ == "__main__":

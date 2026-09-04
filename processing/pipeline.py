@@ -4,6 +4,8 @@ from pathlib import Path
 from config import BRAINS_DIR, KEEP_VIDEOS, WORKSPACE_DIR
 from download.downloader import acquire_reel
 from storage.brain_object import (
+    extract_reel_id_from_url,
+    get_cached_brain_object,
     load_brain_object,
     load_latest_brain_object,
     update_category,
@@ -50,6 +52,32 @@ def _load_latest_brain_object():
 
 
 def process_reel(url, progress_callback=None):
+    # 1. Check for valid existing Brain Object cache before downloading
+    candidate_id = extract_reel_id_from_url(url)
+    if candidate_id:
+        cached_brain = get_cached_brain_object(candidate_id)
+        if cached_brain is not None:
+            print(f"[OK] Reel '{candidate_id}' is already processed. Returning cached Brain Object.")
+            _notify(progress_callback, "Already Processed (Using Cached Knowledge)")
+            category = cached_brain.get("knowledge", {}).get("category")
+            knowledge = cached_brain.get("knowledge")
+            transcript = cached_brain.get("content", {}).get("transcript")
+            brain_path = Path(BRAINS_DIR) / f"{candidate_id}.json"
+
+            return {
+                "success": True,
+                "cached": True,
+                "onenote_success": True,
+                "onenote_error": None,
+                "brain": cached_brain,
+                "brain_path": brain_path,
+                "transcript": transcript,
+                "category": category,
+                "knowledge": knowledge,
+                "error": None,
+            }
+
+    # 2. Normal execution for new or incomplete reels
     reel_id = None
     try:
         _notify(progress_callback, "Downloading")
@@ -179,6 +207,7 @@ def process_reel(url, progress_callback=None):
 
         return {
             "success": True,
+            "cached": False,
             "onenote_success": onenote_success,
             "onenote_error": onenote_error,
             "brain": brain,
@@ -195,6 +224,7 @@ def process_reel(url, progress_callback=None):
         brain_path = (Path(BRAINS_DIR) / f"{reel_id}.json") if reel_id else None
         return {
             "success": False,
+            "cached": False,
             "onenote_success": False,
             "onenote_error": None,
             "brain": load_brain_object(reel_id) if (brain_path and brain_path.exists()) else None,

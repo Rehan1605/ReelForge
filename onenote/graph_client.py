@@ -173,7 +173,7 @@ class GraphClient:
 
         raise Exception(response.text)
 
-    def create_page(self, section_id, title, html_content):
+    def create_page(self, section_id, title, html_content, thumbnail_path=None):
         if self.access_token is None:
             raise Exception("Not authenticated.")
 
@@ -184,19 +184,55 @@ class GraphClient:
     <title>{escape(str(title))}</title>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
 </head>
-<body data-absolute-enabled="true" style="font-family:Calibri;font-size:11pt">
+<body data-absolute-enabled="true" style="font-family:Calibri, Segoe UI, sans-serif; font-size:11pt">
 {body_content}
 </body>
 </html>
 """
 
+        endpoint = f"{GRAPH_BASE_URL}/me/onenote/sections/{section_id}/pages"
+
+        # Attempt safe multipart image embedding if local thumbnail exists
+        if thumbnail_path and os.path.isfile(thumbnail_path) and os.path.getsize(thumbnail_path) > 0:
+            try:
+                from pathlib import Path
+                ext = Path(thumbnail_path).suffix.lower()
+                mime_type = "image/png" if ext == ".png" else "image/jpeg"
+
+                with open(thumbnail_path, "rb") as img_f:
+                    img_bytes = img_f.read()
+
+                files = {
+                    "Presentation": (None, page_html.encode("utf-8"), "application/xhtml+xml; charset=utf-8"),
+                    "thumbnail": ("thumbnail.jpg", img_bytes, mime_type),
+                }
+
+                response = requests.post(
+                    endpoint,
+                    headers=self._headers(),
+                    files=files,
+                    timeout=30,
+                )
+
+                if response.status_code == 201:
+                    return response.json()
+                else:
+                    print(f"Notice: Multipart OneNote page creation returned HTTP {response.status_code}. Falling back to standard XHTML.")
+            except Exception as e:
+                print(f"Notice: Multipart OneNote page upload error ({e}). Falling back to standard XHTML.")
+
+        # Single-part standard XHTML page creation (fallback or default when no thumbnail)
+        cleaned_html = re.sub(r'<div[^>]*>\s*<img\s+src="name:thumbnail"[^>]*>\s*</div>', '', page_html)
+        cleaned_html = re.sub(r'<img\s+src="name:thumbnail"[^>]*>', '', cleaned_html)
+
         response = requests.post(
-            f"{GRAPH_BASE_URL}/me/onenote/sections/{section_id}/pages",
+            endpoint,
             headers={
                 **self._headers(),
                 "Content-Type": "application/xhtml+xml; charset=utf-8"
             },
-            data=page_html.encode("utf-8")
+            data=cleaned_html.encode("utf-8"),
+            timeout=30,
         )
 
         if response.status_code == 201:
