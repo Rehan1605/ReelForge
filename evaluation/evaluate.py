@@ -1,846 +1,391 @@
 """
 evaluation/evaluate.py
 ----------------------
-Evidence-first single-LLM evaluation pipeline for InstaBrain.
+Grounded LLM evaluation system for ReelForge.
 
-Architecture
-------------
-    Source evidence + Brain Object
-            ↓
-    Evidence-first LLM judge (finding-oriented, no scoring)
-            ↓
-    Field-level findings (CORRECT / MISSING / INCORRECT /
-                          HALLUCINATED / IRRELEVANT / NOT_APPLICABLE)
-            ↓
-    Python: _score_from_findings() → dimension scores
-            ↓
-    Python: _compute_overall_score() → deterministic weighted total
-            ↓
-    Final evaluation dict
+Audits structured Brain Objects against available source evidence
+(caption, transcript, vision analysis, creator, URL) using an LLM judge
+routed through OmniRoute (processing.llm_client.generate_json).
 
-The LLM is NOT asked to produce numerical scores.
-All scoring is deterministic Python.
+Scoring Rubric (7 Dimensions, Normalized to 0–100):
+  - Category Accuracy (0–10)
+  - Grounding / Factuality (0–20)
+  - Completeness (0–15)
+  - Summary / Insight Quality (0–15)
+  - Structured Extraction Accuracy (0–20)
+  - Tags / Tools / Resources (0–10)
+  - Multimodal Utilization (0–10 when applicable, or not_applicable)
 
-Public API
-----------
-    evaluate_reel(reel_id, expected_category, caption, transcript, brain_object)
-        -> dict  (validated evaluation result)
-
-CLI
----
-    python evaluation/evaluate.py path/to/test_case.json [--save output.json]
+Quality Bands:
+  - 90–100: excellent
+  - 75–89 : good
+  - 60–74 : fair
+  - 40–59 : poor
+  - 0–39  : critical
 """
 
 from __future__ import annotations
 
 import json
-import re
-import sys
+import os
+from datetime import datetime
 from pathlib import Path
+from typing import Any
 
-import requests
+from config import EVALUATION_MODEL, TEXT_MODEL
+from processing.llm_client import generate_json
 
-# ---------------------------------------------------------------------------
-# Configuration
-# ---------------------------------------------------------------------------
+EVALUATION_VERSION = "2.7.0"
 
-_PROMPT_PATH = Path(__file__).resolve().parent / "judge_prompt.txt"
-_OLLAMA_URL  = "http://localhost:11434/api/generate"
+_PROMPT_PATH = Path(__file__).resolve().parent.parent / "prompts" / "evaluation_judge.txt"
+if not _PROMPT_PATH.exists():
+    # Fallback to local evaluation folder if prompts/ is not adjacent
+    _PROMPT_PATH = Path(__file__).resolve().parent / "judge_prompt.txt"
 
-try:
-    from config import TEXT_MODEL as _JUDGE_MODEL
-except Exception:
-    _JUDGE_MODEL = "qwen2.5:7b-instruct"
 
-# ---------------------------------------------------------------------------
-# Schema constants — new evidence-first contract
-# ---------------------------------------------------------------------------
+class EvaluationValidationError(ValueError):
+    """Raised when the LLM judge output fails structural or schema validation."""
+    pass
 
-# Fields the LLM must return at the top level.
-_REQUIRED_FIELDS = [
-    "reel_id",
-    "category_evaluation",
-    "findings",
-    "critical_error",
-    "strengths",
-    "final_verdict",
-]
 
-# Keys required inside category_evaluation.
-_REQUIRED_CATEGORY_EVAL_KEYS = ["expected", "actual", "correct", "evidence"]
-
-# Keys required inside each finding object.
-_REQUIRED_FINDING_KEYS = ["field", "status", "claim", "evidence"]
-
-# The only valid status values.
-_VALID_STATUSES = {
-    "CORRECT",
-    "MISSING",
-    "INCORRECT",
-    "HALLUCINATED",
-    "IRRELEVANT",
-    "NOT_APPLICABLE",
+DIMENSION_MAX_SCORES: dict[str, int] = {
+    "category_accuracy": 10,
+    "grounding_factuality": 20,
+    "completeness": 15,
+    "summary_quality": 15,
+    "structured_extraction": 20,
+    "tags_tools_resources": 10,
+    "multimodal_utilization": 10,
 }
 
-# ---------------------------------------------------------------------------
-# Rubric weights (§14) — used only by Python, never sent to the LLM.
-# website_accuracy and tag_quality are derived and reported separately;
-# they are intentionally absent from the weighted formula.
-# ---------------------------------------------------------------------------
-_SCORE_WEIGHTS: dict[str, int] = {
-    "category_accuracy":  15,
-    "factual_accuracy":   25,
-    "hallucination":      20,
-    "completeness":       15,
-    "relevance":          10,
-    "summary_quality":    10,
-    "structured_quality":  5,
-}
-assert sum(_SCORE_WEIGHTS.values()) == 100, "Score weights must sum to 100"
 
-# ---------------------------------------------------------------------------
-# Deterministic scoring from findings
-# ---------------------------------------------------------------------------
-
-def _score_from_findings(result: dict) -> dict:
-    """
-    Derive all dimension scores from the LLM's field-level findings.
-
-    This replaces the old approach of trusting the LLM to assign numbers.
-    The LLM's job was finding; our job is scoring.
-
-    Scoring rules
-    -------------
-
-    category_accuracy
-        Comes directly from category_evaluation.correct:
-          True  → 5
-          False → 0
-        (The rubric's intermediate values 1–4 require human judgment on
-        ambiguous categories. For binary correct/incorrect from the LLM
-        we use the endpoints. A future multi-judge pass can refine this.)
-
-    hallucination  (inverted: 5 = clean, 0 = all fabricated)
-        Count HALLUCINATED findings.
-          0              → 5
-          1              → 4
-          2              → 3
-          3–4            → 2
-          5+             → 1
-          All/most fields HALLUCINATED (>= half of total findings) → 0
-
-    factual_accuracy
-        Based on INCORRECT + HALLUCINATED findings (both represent
-        content that does not match the source).
-          0 bad findings → 5
-          1              → 4
-          2              → 3
-          3–4            → 2
-          5+             → 1
-          >= half bad    → 0
-
-    completeness
-        Based on MISSING findings.
-          0 MISSING → 5
-          1         → 4
-          2         → 3
-          3–4       → 2
-          5+        → 1
-          >= half of source fields MISSING → 0
-
-    relevance
-        Based on IRRELEVANT findings.
-          0 IRRELEVANT → 5
-          1            → 4
-          2–3          → 3
-          4+           → 2
-          (Relevance rarely hits 0–1 from findings alone; floor at 2
-          unless most findings are IRRELEVANT.)
-
-    summary_quality
-        Locate findings where field == "summary":
-          No summary finding at all → cannot determine → 3 (neutral)
-          Summary finding is CORRECT → 5
-          Summary finding is MISSING → 1
-          Summary finding is INCORRECT or HALLUCINATED → 0
-          Summary finding is IRRELEVANT → 2
-
-    structured_quality
-        Look at CORRECT vs (INCORRECT + HALLUCINATED + MISSING) across
-        all non-summary, non-title, non-tag, non-website, non-category fields.
-          All correct        → 5
-          Mostly correct     → 4
-          Half-half          → 3
-          Mostly problems    → 2
-          All problems       → 1
-          No structured data → 3 (neutral)
-
-    website_accuracy  (reported separately, not in weighted formula)
-        Locate findings where field == "websites":
-          No website finding → 5 (nothing to evaluate, correct by default)
-          CORRECT            → 5
-          MISSING            → 3
-          HALLUCINATED       → 0
-          INCORRECT          → 1
-
-    tag_quality  (reported separately, not in weighted formula)
-        Locate findings where field == "tags":
-          No tag finding     → 3 (neutral)
-          CORRECT            → 5
-          MISSING            → 3
-          HALLUCINATED       → 0
-          IRRELEVANT         → 2
-
-    All scores are clamped to 0–5.
-    """
-    findings = result.get("findings", [])
-    cat_correct = result.get("category_evaluation", {}).get("correct", False)
-
-    # Partition findings by status
-    hallucinated = [f for f in findings if f.get("status") == "HALLUCINATED"]
-    incorrect    = [f for f in findings if f.get("status") == "INCORRECT"]
-    missing      = [f for f in findings if f.get("status") == "MISSING"]
-    irrelevant   = [f for f in findings if f.get("status") == "IRRELEVANT"]
-    total        = len(findings)
-
-    # ── category_accuracy ────────────────────────────────────────────────
-    category_accuracy = 5 if cat_correct else 0
-
-    # ── hallucination ─────────────────────────────────────────────────────
-    n_h = len(hallucinated)
-    if n_h == 0:
-        hallucination = 5
-    elif n_h == 1:
-        hallucination = 4
-    elif n_h == 2:
-        hallucination = 3
-    elif n_h <= 4:
-        hallucination = 2
-    elif total > 0 and n_h >= total / 2:
-        hallucination = 0
-    else:
-        hallucination = 1
-
-    # ── factual_accuracy ──────────────────────────────────────────────────
-    n_bad = len(incorrect) + len(hallucinated)
-    if n_bad == 0:
-        factual_accuracy = 5
-    elif n_bad == 1:
-        factual_accuracy = 4
-    elif n_bad == 2:
-        factual_accuracy = 3
-    elif n_bad <= 4:
-        factual_accuracy = 2
-    elif total > 0 and n_bad >= total / 2:
-        factual_accuracy = 0
-    else:
-        factual_accuracy = 1
-
-    # ── completeness ──────────────────────────────────────────────────────
-    n_m = len(missing)
-    if n_m == 0:
-        completeness = 5
-    elif n_m == 1:
-        completeness = 4
-    elif n_m == 2:
-        completeness = 3
-    elif n_m <= 4:
-        completeness = 2
-    elif total > 0 and n_m >= total / 2:
-        completeness = 0
-    else:
-        completeness = 1
-
-    # ── relevance ─────────────────────────────────────────────────────────
-    n_ir = len(irrelevant)
-    if n_ir == 0:
-        relevance = 5
-    elif n_ir == 1:
-        relevance = 4
-    elif n_ir <= 3:
-        relevance = 3
-    else:
-        relevance = 2   # floor at 2; 0–1 requires human judgment
-
-    # ── summary_quality ───────────────────────────────────────────────────
-    summary_findings = [f for f in findings
-                        if f.get("field", "").lower() in ("summary", "title")]
-    if not summary_findings:
-        summary_quality = 3   # neutral — no evidence either way
-    else:
-        # Use the worst summary/title finding
-        statuses = {f.get("status") for f in summary_findings}
-        if "HALLUCINATED" in statuses or "INCORRECT" in statuses:
-            summary_quality = 0
-        elif "MISSING" in statuses:
-            summary_quality = 1
-        elif "IRRELEVANT" in statuses:
-            summary_quality = 2
-        else:
-            summary_quality = 5   # all CORRECT or NOT_APPLICABLE
-
-    # ── structured_quality ────────────────────────────────────────────────
-    _non_structural = {"summary", "title", "tags", "websites", "category",
-                       "reel_id", "id", "status"}
-    structured_findings = [
-        f for f in findings
-        if f.get("field", "").lower() not in _non_structural
-    ]
-    if not structured_findings:
-        structured_quality = 3   # neutral
-    else:
-        n_ok  = sum(1 for f in structured_findings
-                    if f.get("status") in ("CORRECT", "NOT_APPLICABLE"))
-        n_tot = len(structured_findings)
-        ratio = n_ok / n_tot
-        if ratio == 1.0:
-            structured_quality = 5
-        elif ratio >= 0.8:
-            structured_quality = 4
-        elif ratio >= 0.5:
-            structured_quality = 3
-        elif ratio >= 0.25:
-            structured_quality = 2
-        else:
-            structured_quality = 1
-
-    # ── website_accuracy (reported separately) ────────────────────────────
-    website_findings = [f for f in findings
-                        if f.get("field", "").lower() in ("websites", "website", "urls")]
-    if not website_findings:
-        website_accuracy = 5   # no URLs in source or output — correct by default
-    else:
-        worst = {f.get("status") for f in website_findings}
-        if "HALLUCINATED" in worst:
-            website_accuracy = 0
-        elif "INCORRECT" in worst:
-            website_accuracy = 1
-        elif "MISSING" in worst:
-            website_accuracy = 3
-        else:
-            website_accuracy = 5
-
-    # ── tag_quality (reported separately) ─────────────────────────────────
-    tag_findings = [f for f in findings
-                    if f.get("field", "").lower() in ("tags", "tag")]
-    if not tag_findings:
-        tag_quality = 3   # neutral
-    else:
-        worst = {f.get("status") for f in tag_findings}
-        if "HALLUCINATED" in worst:
-            tag_quality = 0
-        elif "IRRELEVANT" in worst:
-            tag_quality = 2
-        elif "MISSING" in worst:
-            tag_quality = 3
-        else:
-            tag_quality = 5
-
-    return {
-        "category_accuracy":  category_accuracy,
-        "factual_accuracy":   factual_accuracy,
-        "hallucination":      hallucination,
-        "completeness":       completeness,
-        "relevance":          relevance,
-        "summary_quality":    summary_quality,
-        "structured_quality": structured_quality,
-        "website_accuracy":   website_accuracy,
-        "tag_quality":        tag_quality,
-    }
-
-
-def _compute_overall_score(scores: dict) -> int:
-    """
-    Calculate the authoritative overall score from rubric weights.
-
-    Formula (rubric §14):
-        sum(score / 5 * weight)  for each weighted dimension
-    Rounded to the nearest integer, clamped to [0, 100].
-
-    website_accuracy and tag_quality are excluded — the rubric formula
-    does not assign them a weight.
-    """
-    weighted_sum = 0
-    for key, weight in _SCORE_WEIGHTS.items():
-        weighted_sum += scores.get(key, 0) * weight
-    overall = round(weighted_sum / 5)
-    return max(0, min(100, overall))
-
-
-# ---------------------------------------------------------------------------
-# Internal helpers
-# ---------------------------------------------------------------------------
-
-def _strip_fences(text: str) -> str:
-    """Remove markdown code fences the model may wrap around JSON."""
-    text = text.strip()
-    match = re.match(r"^```(?:json)?\s*([\s\S]*?)\s*```$", text, re.IGNORECASE)
-    if match:
-        return match.group(1).strip()
-    return text
-
-
-def _load_prompt() -> str:
-    if not _PROMPT_PATH.exists():
-        raise FileNotFoundError(
-            f"Judge prompt not found: {_PROMPT_PATH}\n"
-            "Expected: evaluation/judge_prompt.txt"
-        )
+def _load_prompt_template() -> str:
+    if not _PROMPT_PATH.is_file():
+        raise FileNotFoundError(f"Evaluation prompt template not found at '{_PROMPT_PATH}'.")
     return _PROMPT_PATH.read_text(encoding="utf-8")
 
 
-def _build_prompt(
+def _format_evidence_text(val: Any) -> str:
+    if val is None:
+        return "[None provided]"
+    if isinstance(val, str):
+        cleaned = val.strip()
+        return cleaned if cleaned else "[None provided]"
+    if isinstance(val, (dict, list)):
+        return json.dumps(val, indent=2, ensure_ascii=False)
+    return str(val)
+
+
+def build_evaluation_prompt(
     reel_id: str,
-    expected_category: str,
-    caption: str,
-    transcript: str,
-    brain_object: dict,
+    source_url: str | None,
+    creator: str | None,
+    caption: str | None,
+    transcript: str | None,
+    vision_analysis: Any,
+    category: str,
+    knowledge: dict,
 ) -> str:
-    """
-    Fill the five known placeholders using plain str.replace().
+    """Build the prompt for the grounded evaluation judge."""
+    template = _load_prompt_template()
 
-    str.format() is intentionally avoided — the prompt contains literal
-    JSON braces that would trigger a KeyError with str.format().
-    """
-    template = _load_prompt()
-    replacements = {
-        "{reel_id}":            reel_id,
-        "{expected_category}":  expected_category,
-        "{caption}":            caption or "(no caption provided)",
-        "{transcript}":         transcript or "(no transcript provided)",
-        "{brain_object}":       json.dumps(brain_object, indent=2, ensure_ascii=False),
-    }
-    result = template
-    for placeholder, value in replacements.items():
-        result = result.replace(placeholder, value)
-    return result
+    knowledge_clean = {k: v for k, v in knowledge.items() if v is not None}
+    knowledge_str = json.dumps(knowledge_clean, indent=2, ensure_ascii=False)
+
+    prompt = (
+        template
+        .replace("{{reel_id}}", str(reel_id or "Unknown"))
+        .replace("{{source_url}}", str(source_url or "Unknown"))
+        .replace("{{creator}}", str(creator or "Unknown"))
+        .replace("{{caption}}", _format_evidence_text(caption))
+        .replace("{{transcript}}", _format_evidence_text(transcript))
+        .replace("{{vision_analysis}}", _format_evidence_text(vision_analysis))
+        .replace("{{category}}", str(category or "Unknown"))
+        .replace("{{knowledge_json}}", knowledge_str)
+    )
+    return prompt
 
 
-def _call_ollama(prompt: str) -> str:
-    """POST prompt to local Ollama. Returns raw response string."""
+def _clamp(val: Any, min_val: int, max_val: int, default: int = 0) -> int:
     try:
-        response = requests.post(
-            _OLLAMA_URL,
-            json={
-                "model":  _JUDGE_MODEL,
-                "prompt": prompt,
-                "stream": False,
-                # Native Ollama JSON mode — constrains token sampling so the
-                # model can only emit valid JSON tokens.
-                "format": "json",
-            },
-            timeout=300,
-        )
-        response.raise_for_status()
-    except requests.exceptions.ConnectionError:
-        raise RuntimeError(
-            f"Cannot connect to Ollama at {_OLLAMA_URL}. "
-            "Is Ollama running?  Try: ollama serve"
-        )
-    except requests.exceptions.Timeout:
-        raise RuntimeError(
-            "Ollama request timed out after 300 seconds. "
-            "The model may be too slow for this prompt size."
-        )
-    except requests.exceptions.HTTPError as exc:
-        raise RuntimeError(f"Ollama HTTP error: {exc}") from exc
-
-    payload = response.json()
-    raw = payload.get("response", "")
-    if not raw:
-        raise RuntimeError(
-            f"Ollama returned an empty response. Full payload: {payload}"
-        )
-    return raw
+        num = int(val)
+        return max(min_val, min(num, max_val))
+    except (ValueError, TypeError):
+        return default
 
 
-def _parse_judge_output(raw: str) -> dict:
+def compute_normalized_score(dimensions: dict) -> tuple[float, str]:
     """
-    Parse the judge's raw output into a Python dict.
-    Handles plain JSON and ```json-fenced JSON.
-    Raises ValueError with a useful message on malformed JSON.
+    Deterministically compute the overall score (0–100) and quality band
+    by normalizing across applicable dimensions.
     """
-    cleaned = _strip_fences(raw)
-    try:
-        return json.loads(cleaned)
-    except json.JSONDecodeError as exc:
-        snippet = cleaned[:300] + ("..." if len(cleaned) > 300 else "")
-        raise ValueError(
-            f"Judge returned malformed JSON.\n"
-            f"JSON error: {exc}\n"
-            f"Raw output (first 300 chars):\n{snippet}"
-        ) from exc
+    total_obtained = 0.0
+    max_possible = 0.0
 
+    # 1. Base 6 Dimensions (Total = 90)
+    for dim_key in (
+        "category_accuracy",
+        "grounding_factuality",
+        "completeness",
+        "summary_quality",
+        "structured_extraction",
+        "tags_tools_resources",
+    ):
+        dim_data = dimensions.get(dim_key) or {}
+        max_score = DIMENSION_MAX_SCORES[dim_key]
+        score = _clamp(dim_data.get("score"), 0, max_score, default=0)
+        total_obtained += score
+        max_possible += max_score
 
-# ---------------------------------------------------------------------------
-# Validation
-# ---------------------------------------------------------------------------
+    # 2. Multimodal Dimension (Optional +10)
+    mm_data = dimensions.get("multimodal_utilization") or {}
+    mm_applicable = bool(mm_data.get("applicable", False))
+    if mm_applicable and mm_data.get("score") is not None:
+        mm_score = _clamp(mm_data.get("score"), 0, 10, default=0)
+        total_obtained += mm_score
+        max_possible += 10.0
 
-class EvaluationValidationError(Exception):
-    """Raised when the judge output does not conform to the evidence-first schema."""
-
-
-def _validate(result: dict) -> list[str]:
-    """
-    Validate the judge's finding-oriented output.
-    Returns a list of error strings; empty list = valid.
-    Strings prefixed 'WARNING:' are soft consistency warnings, not hard errors.
-    """
-    errors: list[str] = []
-
-    # Top-level required fields
-    for field in _REQUIRED_FIELDS:
-        if field not in result:
-            errors.append(f"Missing required top-level field: '{field}'")
-
-    if errors:
-        return errors   # can't safely go deeper
-
-    # category_evaluation
-    cat_eval = result.get("category_evaluation", {})
-    if not isinstance(cat_eval, dict):
-        errors.append("'category_evaluation' must be an object.")
+    if max_possible <= 0:
+        overall_score = 0.0
     else:
-        for key in _REQUIRED_CATEGORY_EVAL_KEYS:
-            if key not in cat_eval:
-                errors.append(f"'category_evaluation' missing key: '{key}'")
-        if not isinstance(cat_eval.get("correct"), bool):
-            errors.append(
-                f"'category_evaluation.correct' must be a boolean, "
-                f"got: {cat_eval.get('correct')!r}"
-            )
-        if not isinstance(cat_eval.get("evidence"), str) or not cat_eval.get("evidence", "").strip():
-            errors.append("'category_evaluation.evidence' must be a non-empty string.")
+        overall_score = round((total_obtained / max_possible) * 100, 1)
 
-    # findings
-    findings = result.get("findings")
-    if not isinstance(findings, list):
-        errors.append("'findings' must be an array.")
+    # Quality Band Mapping
+    if overall_score >= 90.0:
+        quality_band = "excellent"
+    elif overall_score >= 75.0:
+        quality_band = "good"
+    elif overall_score >= 60.0:
+        quality_band = "fair"
+    elif overall_score >= 40.0:
+        quality_band = "poor"
     else:
-        for i, finding in enumerate(findings):
-            if not isinstance(finding, dict):
-                errors.append(f"'findings[{i}]' must be an object.")
-                continue
-            for key in _REQUIRED_FINDING_KEYS:
-                if key not in finding:
-                    errors.append(f"'findings[{i}]' missing key: '{key}'")
-            status = finding.get("status")
-            if status not in _VALID_STATUSES:
-                errors.append(
-                    f"'findings[{i}].status' must be one of "
-                    f"{sorted(_VALID_STATUSES)}, got: {status!r}"
-                )
-            # evidence must be non-empty for problematic findings
-            if status in ("HALLUCINATED", "INCORRECT", "MISSING"):
-                ev = finding.get("evidence", "")
-                if not isinstance(ev, str) or not ev.strip():
-                    errors.append(
-                        f"'findings[{i}]' has status={status!r} "
-                        "but 'evidence' is empty. Evidence is required for this status."
-                    )
+        quality_band = "critical"
 
-    # critical_error
-    if not isinstance(result.get("critical_error"), bool):
-        errors.append(
-            f"'critical_error' must be a boolean, "
-            f"got: {result.get('critical_error')!r}"
-        )
-
-    # strengths
-    if not isinstance(result.get("strengths"), list):
-        errors.append("'strengths' must be an array.")
-
-    # final_verdict
-    if not isinstance(result.get("final_verdict"), str) or not result["final_verdict"].strip():
-        errors.append("'final_verdict' must be a non-empty string.")
-
-    # Consistency warnings — only run when findings are structurally valid dicts
-    if isinstance(findings, list) and all(isinstance(f, dict) for f in findings):
-        hallucinated_findings = [f for f in findings if f.get("status") == "HALLUCINATED"]
-        missing_findings      = [f for f in findings if f.get("status") == "MISSING"]
-        ce = result.get("critical_error", False)
-
-        # Fabricated URL findings should always trigger critical_error
-        fabricated_urls = [
-            f for f in hallucinated_findings
-            if "url" in f.get("field", "").lower() or "website" in f.get("field", "").lower()
-        ]
-        if fabricated_urls and not ce:
-            errors.append(
-                "WARNING: hallucinated website/URL findings are present but "
-                "critical_error is false. Fabricated URLs should trigger critical_error=true."
-            )
-
-        # Detect problems buried in final_verdict but absent from findings[].
-        # We look for hallucination/missing language in the verdict and compare
-        # against the structured findings count.  This is a heuristic — we do
-        # NOT parse or extract findings from prose; we only warn.
-        verdict = result.get("final_verdict", "").lower()
-        _halluc_keywords = ("hallucinated", "hallucination", "fabricated",
-                            "invented", "not in the source", "not mentioned")
-        _missing_keywords = ("missing", "omitted", "not captured", "absent from")
-
-        verdict_mentions_hallucination = any(kw in verdict for kw in _halluc_keywords)
-        verdict_mentions_missing       = any(kw in verdict for kw in _missing_keywords)
-
-        if verdict_mentions_hallucination and len(hallucinated_findings) == 0:
-            errors.append(
-                "WARNING: final_verdict mentions hallucination/fabrication but "
-                "findings[] contains zero HALLUCINATED entries. "
-                "Problems mentioned in final_verdict must also appear as structured "
-                "findings. The scoring system cannot see prose-only issues."
-            )
-
-        if verdict_mentions_missing and len(missing_findings) == 0:
-            errors.append(
-                "WARNING: final_verdict mentions missing/omitted information but "
-                "findings[] contains zero MISSING entries. "
-                "Problems mentioned in final_verdict must also appear as structured "
-                "findings. The scoring system cannot see prose-only issues."
-            )
-
-    return errors
+    return overall_score, quality_band
 
 
-# ---------------------------------------------------------------------------
-# Quality classification (rubric §15)
-# ---------------------------------------------------------------------------
-
-def _classify(overall_score: int | float, critical_error: bool) -> str:
-    """Map overall_score + critical_error to a quality classification."""
-    if overall_score >= 90:
-        return "Good" if critical_error else "Excellent"
-    if overall_score >= 80:
-        return "Good"
-    if overall_score >= 70:
-        return "Acceptable"
-    if overall_score >= 60:
-        return "Needs Improvement"
-    return "Poor"
-
-
-# ---------------------------------------------------------------------------
-# Public API
-# ---------------------------------------------------------------------------
-
-def evaluate_reel(
+def validate_and_normalize_judge_output(
+    raw_dict: dict,
     reel_id: str,
-    expected_category: str,
-    caption: str,
-    transcript: str,
-    brain_object: dict,
+    category: str,
+    available_modalities: dict,
+    judge_model: str,
+) -> dict:
+    """Validate and clean judge output, ensuring consistent types and deterministic scoring."""
+    if not isinstance(raw_dict, dict):
+        raise EvaluationValidationError(f"Judge output must be a dictionary, got {type(raw_dict).__name__}")
+
+    raw_dimensions = raw_dict.get("dimensions")
+    if not isinstance(raw_dimensions, dict):
+        raise EvaluationValidationError("Judge output missing 'dimensions' object.")
+
+    validated_dimensions: dict[str, Any] = {}
+
+    # Category Accuracy
+    cat_data = raw_dimensions.get("category_accuracy") or {}
+    verdict = str(cat_data.get("verdict", "questionable")).lower()
+    if verdict not in ("correct", "questionable", "incorrect"):
+        verdict = "questionable"
+    validated_dimensions["category_accuracy"] = {
+        "score": _clamp(cat_data.get("score"), 0, 10, default=5),
+        "verdict": verdict,
+        "reasoning": str(cat_data.get("reasoning", "")).strip(),
+    }
+
+    # Standard Dimensions
+    for dim_key in (
+        "grounding_factuality",
+        "completeness",
+        "summary_quality",
+        "structured_extraction",
+        "tags_tools_resources",
+    ):
+        d_data = raw_dimensions.get(dim_key) or {}
+        max_score = DIMENSION_MAX_SCORES[dim_key]
+        validated_dimensions[dim_key] = {
+            "score": _clamp(d_data.get("score"), 0, max_score, default=0),
+            "reasoning": str(d_data.get("reasoning", "")).strip(),
+        }
+
+    # Multimodal Dimension
+    mm_data = raw_dimensions.get("multimodal_utilization") or {}
+    has_mm_evidence = bool(available_modalities.get("transcript") or available_modalities.get("vision_analysis"))
+    mm_applicable = bool(mm_data.get("applicable", has_mm_evidence))
+
+    if not has_mm_evidence:
+        mm_applicable = False
+        mm_score = None
+    elif mm_data.get("score") is not None:
+        mm_score = _clamp(mm_data.get("score"), 0, 10, default=5)
+    else:
+        mm_score = 5
+
+    validated_dimensions["multimodal_utilization"] = {
+        "applicable": mm_applicable,
+        "score": mm_score,
+        "reasoning": str(mm_data.get("reasoning", "")).strip(),
+    }
+
+    # Issues Validation
+    raw_issues = raw_dict.get("issues") or []
+    validated_issues = []
+    if isinstance(raw_issues, list):
+        for item in raw_issues:
+            if isinstance(item, dict):
+                sev = str(item.get("severity", "minor")).lower()
+                if sev not in ("critical", "major", "minor"):
+                    sev = "minor"
+                validated_issues.append({
+                    "severity": sev,
+                    "field": str(item.get("field", "knowledge")).strip(),
+                    "problem": str(item.get("problem", "Issue identified")).strip(),
+                    "evidence": str(item.get("evidence", "")).strip(),
+                    "recommendation": str(item.get("recommendation", "")).strip(),
+                })
+
+    # Strengths Validation
+    raw_strengths = raw_dict.get("strengths") or []
+    validated_strengths = []
+    if isinstance(raw_strengths, list):
+        for s in raw_strengths:
+            if isinstance(s, str) and s.strip():
+                validated_strengths.append(s.strip())
+
+    overall_score, quality_band = compute_normalized_score(validated_dimensions)
+
+    return {
+        "evaluation_version": EVALUATION_VERSION,
+        "evaluated_at": datetime.now().isoformat(timespec="seconds"),
+        "reel_id": reel_id,
+        "category": category,
+        "available_modalities": available_modalities,
+        "judge_model": judge_model,
+        "judge_type": "llm_grounded",
+        "dimensions": validated_dimensions,
+        "overall_score": overall_score,
+        "quality_band": quality_band,
+        "issues": validated_issues,
+        "strengths": validated_strengths,
+    }
+
+
+def evaluate_reel_evidence(
+    reel_id: str,
+    source_url: str | None,
+    creator: str | None,
+    caption: str | None,
+    transcript: str | None,
+    vision_analysis: Any,
+    category: str,
+    knowledge: dict,
+    model: str | None = None,
 ) -> dict:
     """
-    Evaluate a single reel using the local Ollama evidence-first judge.
-
-    Parameters
-    ----------
-    reel_id            : str   Identifier for the reel.
-    expected_category  : str   The correct category (human-verified).
-    caption            : str   Original Instagram caption.
-    transcript         : str   Whisper transcript of the reel audio.
-    brain_object       : dict  The full Brain Object generated by InstaBrain.
-
-    Returns
-    -------
-    dict  Validated evaluation result with deterministic scores.
-
-    Raises
-    ------
-    FileNotFoundError         if judge_prompt.txt is missing.
-    RuntimeError              if Ollama is unavailable or returns empty response.
-    ValueError                if the judge returns malformed JSON.
-    EvaluationValidationError if the judge JSON fails schema validation.
+    Evaluate a single Reel using the grounded OmniRoute LLM judge.
+    Returns the validated evaluation dictionary.
     """
-    print(f"Evaluating {reel_id}...")
-    print(f"Judge model: {_JUDGE_MODEL}")
+    target_model = model or EVALUATION_MODEL or TEXT_MODEL
 
-    prompt = _build_prompt(
-        reel_id, expected_category, caption, transcript, brain_object
+    available_modalities = {
+        "caption": bool(caption and isinstance(caption, str) and caption.strip()),
+        "transcript": bool(transcript and isinstance(transcript, str) and transcript.strip()),
+        "vision_analysis": bool(vision_analysis),
+    }
+
+    prompt = build_evaluation_prompt(
+        reel_id=reel_id,
+        source_url=source_url,
+        creator=creator,
+        caption=caption,
+        transcript=transcript,
+        vision_analysis=vision_analysis,
+        category=category,
+        knowledge=knowledge,
     )
 
-    raw    = _call_ollama(prompt)
-    result = _parse_judge_output(raw)
+    raw_response = generate_json(
+        prompt=prompt,
+        model=target_model,
+        temperature=0.1,
+    )
 
-    # Pin reel_id — the judge may echo it or leave it blank.
-    result["reel_id"] = reel_id
+    evaluation = validate_and_normalize_judge_output(
+        raw_dict=raw_response,
+        reel_id=reel_id,
+        category=category,
+        available_modalities=available_modalities,
+        judge_model=target_model,
+    )
+    return evaluation
 
-    validation_errors = _validate(result)
-    hard_errors = [e for e in validation_errors if not e.startswith("WARNING")]
-    warnings    = [e for e in validation_errors if e.startswith("WARNING")]
 
-    if hard_errors:
-        formatted = "\n  ".join(hard_errors)
-        raise EvaluationValidationError(
-            f"Judge output failed schema validation "
-            f"({len(hard_errors)} error(s)):\n  {formatted}\n\n"
-            f"Raw judge output (first 500 chars):\n{raw[:500]}"
-        )
+def evaluate_brain_object(brain: dict, model: str | None = None) -> dict:
+    """
+    Evaluate a loaded Brain Object dictionary against its internal source evidence.
+    Does NOT modify the Brain Object.
+    """
+    reel_id = brain.get("id") or "Unknown"
+    source = brain.get("source") or {}
+    creator_obj = brain.get("creator") or {}
+    content = brain.get("content") or {}
+    knowledge = brain.get("knowledge") or {}
 
-    for w in warnings:
-        print(f"  [warn] {w}")
+    source_url = source.get("url")
+    username = creator_obj.get("username")
+    full_name = creator_obj.get("full_name")
+    creator_str = f"@{username} ({full_name})" if username and full_name else (f"@{username}" if username else None)
 
-    # ------------------------------------------------------------------
-    # Deterministic scoring — derived entirely from findings, not from
-    # any numbers the LLM may have emitted.
-    # ------------------------------------------------------------------
-    scores  = _score_from_findings(result)
-    overall = _compute_overall_score(scores)
+    caption = content.get("caption")
+    transcript = content.get("transcript")
+    vision_analysis = content.get("vision_analysis")
+    category = knowledge.get("category") or "Other"
 
-    result["scores"]        = scores
-    result["overall_score"] = overall
-
-    result["quality_classification"] = _classify(overall, result["critical_error"])
-
-    return result
+    return evaluate_reel_evidence(
+        reel_id=reel_id,
+        source_url=source_url,
+        creator=creator_str,
+        caption=caption,
+        transcript=transcript,
+        vision_analysis=vision_analysis,
+        category=category,
+        knowledge=knowledge,
+        model=model,
+    )
 
 
 # ---------------------------------------------------------------------------
-# CLI
+# Legacy compatibility alias
 # ---------------------------------------------------------------------------
+def evaluate_reel(
+    reel_id: str,
+    expected_category: str | None = None,
+    caption: str | None = None,
+    transcript: str | None = None,
+    brain_object: dict | None = None,
+    vision_analysis: Any = None,
+    model: str | None = None,
+) -> dict:
+    """Legacy compatibility helper."""
+    if brain_object:
+        b = dict(brain_object)
+        if caption is not None:
+            b.setdefault("content", {})["caption"] = caption
+        if transcript is not None:
+            b.setdefault("content", {})["transcript"] = transcript
+        if vision_analysis is not None:
+            b.setdefault("content", {})["vision_analysis"] = vision_analysis
+        return evaluate_brain_object(b, model=model)
 
-def _print_summary(result: dict) -> None:
-    """Print a concise human-readable summary."""
-    cat    = result.get("category_evaluation", {})
-    scores = result.get("scores", {})
-    findings = result.get("findings", [])
-
-    print()
-    print(f"  Reel ID        : {result.get('reel_id', '?')}")
-    print(f"  Category       : {cat.get('actual', '?')} "
-          f"(expected: {cat.get('expected', '?')}) — "
-          f"{'✓' if cat.get('correct') else '✗'}")
-    print(f"  Cat. evidence  : {cat.get('evidence', '')}")
-    print()
-
-    # Finding summary
-    from collections import Counter
-    status_counts = Counter(f.get("status") for f in findings)
-    print(f"  Findings ({len(findings)} total):")
-    for status in ("CORRECT", "MISSING", "INCORRECT", "HALLUCINATED",
-                   "IRRELEVANT", "NOT_APPLICABLE"):
-        n = status_counts.get(status, 0)
-        if n:
-            print(f"    {status:<18} {n}")
-
-    print()
-    print("  Derived dimension scores (0–5):")
-    for key in ("factual_accuracy", "hallucination", "completeness", "relevance",
-                "summary_quality", "structured_quality", "website_accuracy", "tag_quality"):
-        print(f"    {key:<22} {scores.get(key, '?')}")
-
-    print()
-    print(f"  Overall score  : {result.get('overall_score', '?')}/100  (deterministic)")
-    print(f"  Classification : {result.get('quality_classification', '?')}")
-    print(f"  Critical error : {result.get('critical_error', '?')}")
-
-    strengths = result.get("strengths", [])
-    if strengths:
-        print(f"  Strengths ({len(strengths)}):")
-        for s in strengths:
-            print(f"    + {s}")
-
-    # Print problematic findings
-    problems = [f for f in findings
-                if f.get("status") in ("MISSING", "INCORRECT", "HALLUCINATED")]
-    if problems:
-        print(f"  Problems ({len(problems)}):")
-        for p in problems:
-            print(f"    [{p.get('status')}] {p.get('field')}: {p.get('claim')}")
-            print(f"      evidence: {p.get('evidence')}")
-
-    print()
-    print(f"  Verdict: {result.get('final_verdict', '')}")
-    print()
-
-
-def _load_test_case(path: str) -> dict:
-    """
-    Load a test case JSON file.
-    Required shape:
-      {
-        "reel_id": "...",
-        "expected_category": "...",
-        "caption": "...",
-        "transcript": "...",
-        "brain_object": { ... }
-      }
-    """
-    p = Path(path)
-    if not p.exists():
-        print(f"Error: test case file not found: {path}", file=sys.stderr)
-        sys.exit(1)
-
-    with open(p, "r", encoding="utf-8") as f:
-        try:
-            data = json.load(f)
-        except json.JSONDecodeError as exc:
-            print(f"Error: test case file is not valid JSON: {exc}", file=sys.stderr)
-            sys.exit(1)
-
-    required = ("reel_id", "expected_category", "caption", "transcript", "brain_object")
-    missing  = [k for k in required if k not in data]
-    if missing:
-        print(f"Error: test case missing required keys: {missing}", file=sys.stderr)
-        sys.exit(1)
-
-    return data
-
-
-def main() -> None:
-    if len(sys.argv) < 2:
-        print(
-            "Usage: python evaluation/evaluate.py path/to/test_case.json "
-            "[--save path/to/output.json]",
-            file=sys.stderr,
-        )
-        sys.exit(1)
-
-    test_case_path = sys.argv[1]
-
-    save_path: str | None = None
-    if "--save" in sys.argv:
-        idx = sys.argv.index("--save")
-        if idx + 1 < len(sys.argv):
-            save_path = sys.argv[idx + 1]
-        else:
-            print("Error: --save requires a file path argument.", file=sys.stderr)
-            sys.exit(1)
-
-    case = _load_test_case(test_case_path)
-
-    try:
-        result = evaluate_reel(
-            reel_id=case["reel_id"],
-            expected_category=case["expected_category"],
-            caption=case["caption"],
-            transcript=case["transcript"],
-            brain_object=case["brain_object"],
-        )
-    except FileNotFoundError as exc:
-        print(f"Setup error: {exc}", file=sys.stderr)
-        sys.exit(1)
-    except RuntimeError as exc:
-        print(f"Ollama error: {exc}", file=sys.stderr)
-        sys.exit(1)
-    except ValueError as exc:
-        print(f"Parse error: {exc}", file=sys.stderr)
-        sys.exit(1)
-    except EvaluationValidationError as exc:
-        print(f"Validation error: {exc}", file=sys.stderr)
-        sys.exit(1)
-
-    _print_summary(result)
-
-    if save_path:
-        out = Path(save_path)
-        out.parent.mkdir(parents=True, exist_ok=True)
-        with open(out, "w", encoding="utf-8") as f:
-            json.dump(result, f, indent=2, ensure_ascii=False)
-        print(f"Evaluation saved to: {out}")
-    else:
-        print("(Pass --save path/to/output.json to persist the result.)")
-
-
-if __name__ == "__main__":
-    main()
+    knowledge = {"category": expected_category or "Other"}
+    return evaluate_reel_evidence(
+        reel_id=reel_id,
+        source_url=None,
+        creator=None,
+        caption=caption,
+        transcript=transcript,
+        vision_analysis=vision_analysis,
+        category=expected_category or "Other",
+        knowledge=knowledge,
+        model=model,
+    )

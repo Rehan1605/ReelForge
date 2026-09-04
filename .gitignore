@@ -8,3 +8,4 @@ preview.html
 .env
 *.zip
 brains/
+evaluation/results/

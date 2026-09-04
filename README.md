@@ -1,43 +1,45 @@
 # ReelForge
 
-> Turn Instagram Reels into structured, category-specific knowledge and automatically publish clean notes to Microsoft OneNote.
+> Turn Instagram Reels into structured, category-specific personal knowledge and automatically publish clean, formatted notes to Microsoft OneNote.
 
-ReelForge is an automated pipeline that extracts actionable intelligence from short-form video content. When you send an Instagram Reel URL to the ReelForge Telegram bot, it downloads the video, transcribes the audio, samples and analyzes visual video frames, classifies the content into one of 10 distinct domains, extracts structured multimodal metadata, and organizes it into dedicated sections in Microsoft OneNote.
+ReelForge is an automated knowledge extraction system that turns short-form Instagram video content into structured, searchable personal knowledge. When you send an Instagram Reel URL to the ReelForge Telegram bot (or CLI), it downloads the media, transcribes the audio via local Whisper, analyzes visual video frames (on-screen text, code, ingredients, demonstrations), classifies the content into 10 specialized categories, extracts a structured schema, persists an atomic Brain Object with deterministic provenance, and publishes formatted pages into dedicated Microsoft OneNote sections.
 
 ---
 
 ## What It Does
 
-Short-form videos are packed with high-value knowledge—coding roadmaps, recipes, workout routines, cinematography tips, financial breakdowns, and productivity frameworks. However, this knowledge is difficult to search, reference, or organize.
+Short-form videos contain high-value knowledge—coding roadmaps, recipes, workout routines, cinematography techniques, financial breakdowns, and productivity frameworks. However, this knowledge is typically locked in transient video streams.
 
-ReelForge bridges this gap:
+ReelForge structures this knowledge:
 
 1. **Ingests** an Instagram Reel via Telegram or CLI.
 2. **Transcribes** audio offline using local OpenAI Whisper.
-3. **Analyzes visual frames** (on-screen text, visible objects, steps, tools, and actions) via OmniRoute (`VISION_MODEL`).
+3. **Analyzes visual frames** (on-screen text, visible tools, UI code, demonstration steps) via OmniRoute (`VISION_MODEL`).
 4. **Classifies** the content domain using OmniRoute (`TEXT_MODEL`).
 5. **Extracts domain-specific structured knowledge** combining caption, transcript, and visual observations.
-6. **Constructs a Structured Brain Object** (persisted locally as JSON).
-7. **Publishes** a formatted, styled page directly into the appropriate OneNote notebook section via Microsoft Graph API.
+6. **Constructs an Atomic Brain Object** (persisted locally as JSON with provenance metadata).
+7. **Publishes** a styled note directly into the appropriate OneNote category section via Microsoft Graph API.
+8. **Discovers Cross-Reel Connections** via deterministic semantic linking (`/related`, `/topics`, `/creator`).
+9. **Evaluates Quality** via an automated Grounded LLM Judge auditing factuality, completeness, and grounding.
 
 ---
 
 ## 10 Specialized Knowledge Categories
 
-ReelForge routes each reel to a custom extractor tailored for its specific domain:
+ReelForge routes each Reel to a dedicated extractor tailored for its specific domain:
 
-| # | Category | Key Extracted Fields |
+| # | Category | Key Extracted Structured Fields |
 |---|---|---|
-| 1 | **Programming** | Language/Stack, key concepts, code snippets, tools, action items, best practices |
-| 2 | **AI** | Models, tools, prompts, use cases, concepts, key takeaways |
-| 3 | **Food** | Dishes, ingredient lists, step-by-step instructions, cookware, cuisine, tips |
-| 4 | **Photography** | Camera settings (ISO/shutter/aperture), gear, lighting, techniques, editing tools |
-| 5 | **Gym** | Exercises, targeted muscles, equipment, sets & reps, form cues, workout type |
-| 6 | **Movies & Edits** | Film/show titles, editing software, transitions, effects, templates |
-| 7 | **Travel** | Destinations, hotels, transport, attractions, best time to visit, budget tips |
-| 8 | **Finance** | Financial concepts, stocks/funds, metrics/percentages, actionable rules, risks |
-| 9 | **Productivity** | Methods/frameworks, software tools, workflows, daily habits, action items |
-| 10 | **Other** | General takeaways, recommendations, references, structured notes |
+| 1 | **Programming** | Main topic, difficulty, key concepts, resources, tools, code snippets, best practices, mistakes to avoid, action items |
+| 2 | **AI** | Models, tools, websites, prompts, concepts, use cases, key points, tips |
+| 3 | **Food** | Dishes, ingredient lists with measurements, step-by-step instructions, cookware, cuisine, tips |
+| 4 | **Photography** | Camera settings (ISO/shutter/aperture), gear, lighting, techniques, editing tools, locations, tips |
+| 5 | **Gym** | Exercises, targeted muscles, equipment, sets & reps, form cues, workout type, nutrition, recovery, tips |
+| 6 | **Movies & Edits** | Film/show titles, editing software, transitions, effects, templates, steps, tips |
+| 7 | **Travel** | Destinations, attractions, hotels, restaurants, budget tips, best time to visit, transport, tips |
+| 8 | **Finance** | Financial concepts, instruments/stocks, metrics/percentages, actionable rules, risks, key takeaways |
+| 9 | **Productivity** | Methods/frameworks, tools, habits, action items, key concepts, best practices |
+| 10 | **Other** | Key points, recommendations, steps, websites, general takeaways |
 
 ---
 
@@ -46,17 +48,15 @@ ReelForge routes each reel to a custom extractor tailored for its specific domai
 ```text
 Instagram Reel URL
         │
-        ├──────────────► Local Whisper (Offline Audio)
+        ├──────────────► Local Whisper (Offline Audio Transcription)
         │                    │
         │                    ▼
         │                Transcript
         │
-        └──────────────► Vision Analyzer (Frame Sampling)
+        └──────────────► Vision Analyzer (Frame Sampling & Analysis)
                              │
                              ▼
-                         OmniRoute Gateway
-                             │
-                        VISION_MODEL
+                         OmniRoute Gateway (VISION_MODEL)
                              │
                              ▼
                       Vision Analysis
@@ -64,55 +64,82 @@ Instagram Reel URL
 Caption + Transcript + Vision Analysis
                              │
                              ▼
-                       Categorizer
+                       Categorizer (OmniRoute TEXT_MODEL)
                              │
                              ▼
-                      llm_client.py
+                   Category-Specific Extractor
                              │
                              ▼
-                         OmniRoute Gateway
-                             │
-                        TEXT_MODEL
+                   Structured Knowledge JSON
                              │
                              ▼
-                   Category Extractor
+              Atomic Brain Object (JSON + Provenance)
                              │
-                             ▼
-                      Knowledge JSON
-                             │
-                             ▼
-                       Brain Object
-                             │
-                             ▼
-                    OneNote Publisher (Microsoft Graph API)
+        ┌────────────────────┴────────────────────┐
+        ▼                                         ▼
+Microsoft OneNote Publisher            Cross-Reel Knowledge Graph
+(Microsoft Graph API)                  (/related, /topics, /creator)
 ```
 
 ---
 
 ## Key Features
 
-* **Provider-Independent AI Architecture**: Routes production text and vision LLM calls through an OpenAI-compatible OmniRoute gateway (`http://localhost:20128/v1`), supporting local inference nodes or free-tier cloud providers with zero code changes.
-* **Multimodal Evidence Extraction**: Fuses speech transcripts, video captions, and visual frame observations (on-screen text, ingredients/tools, demonstration steps, code/settings) into domain knowledge extraction.
+* **Provider-Independent AI Architecture**: Routes production text, vision, and evaluation LLM calls through an OpenAI-compatible OmniRoute gateway (`http://localhost:20128/v1`), supporting local inference nodes or cloud providers with zero code changes.
+* **Multimodal Evidence Extraction**: Fuses speech transcripts, video captions, and visual frame observations (on-screen text, ingredients, settings, code) into domain knowledge extraction.
 * **100% Local Speech Transcription**: Audio transcription runs completely offline on device via OpenAI Whisper.
-* **High-Fidelity Categorization**: Context-aware prompt design enforcing the dominant-purpose rule with explicit negative boundary conditions.
-* **Domain-Specific Schema Extraction**: Extracts structured fields rather than generic text summaries.
+* **Deterministic Knowledge Lifecycle**: Full ingestion control with `/force <url>` (bypass cache), `/reprocess <reel_id>` (re-extract using stored source URL), `/archive <reel_id>`, `/restore <reel_id>`, and `/recat <reel_id> <category>`.
+* **Cross-Reel Linking & Discovery**: Instant, zero-LLM deterministic discovery linking related Reels across shared tools, tags, creator, and category (`/related`, `/topics`, `/topic`, `/creator`).
+* **Grounded LLM Evaluation System**: Automated 7-dimension quality evaluation framework auditing Brain Objects against source evidence for grounding, factuality, completeness, and multimodal utilization.
 * **Graph API Error Handling & Title Sanitization**: Automatically normalizes colons, slashes, and reserved Microsoft Graph characters to prevent Error 20153 rejections.
-* **Robust Pipeline Status**: Explicit success/error propagation with immediate status feedback in Telegram.
 * **Complete Privacy**: Downloaded videos are cleaned up automatically; metadata is saved locally to JSON before publishing.
 
 ---
 
-## Prerequisites & Requirements
+## Telegram Bot Commands
 
-### System Requirements
-* **Operating System**: Windows 10/11, macOS, or Linux
-* **Python**: Version 3.10 or higher
-* **OmniRoute**: Installed and running locally as LLM gateway ([omniroute](https://github.com/djprawns/omniroute))
-* **FFmpeg**: Required for audio extraction, transcription, and video frame sampling
+| Command | Usage | Description |
+|---|---|---|
+| `/start` | `/start` | Welcome message & bot overview |
+| `/help` | `/help` | Complete command reference guide |
+| `/get <reel_id>` | `/get DcK7QPXuRBJ` | View structured knowledge card with related Reels |
+| `/list [category]` | `/list Food` | List active Brain Objects (optionally filtered by category) |
+| `/stats` | `/stats` | View library size, category breakdown, and modality coverage |
+| `/related <reel_id>` | `/related DZAqhTjN6-R` | Discover conceptually related Reels with match scoring |
+| `/topics` | `/topics` | List top extracted topics across the active library |
+| `/topic <name>` | `/topic Python` | Find all Reels covering a specific topic |
+| `/creator <username>` | `/creator Christian` | Find all Reels from a specific creator |
+| `/reprocess <reel_id>` | `/reprocess DcK7QPXuRBJ` | Re-extract an existing Reel using its stored source URL |
+| `/force <url>` | `/force https://...` | Ingest an Instagram Reel bypassing the cache |
+| `/archive <reel_id>` | `/archive DcK7QPXuRBJ` | Archive a Reel (hides from search/linking, preserves file) |
+| `/restore <reel_id>` | `/restore DcK7QPXuRBJ` | Restore an archived Reel to the active library |
+| `/recat <reel_id> <cat>` | `/recat DcK7QPXuRBJ Food` | Update category metadata without re-downloading |
 
-### External Accounts & Tokens
-1. **Telegram Bot Token**: Created via [@BotFather](https://t.me/botfather).
-2. **Microsoft Azure App (Client ID)**: Registered in Microsoft Entra ID with `Notes.Create` and `Notes.ReadWrite` permissions for Microsoft Graph OneNote access.
+---
+
+## Grounded Evaluation System
+
+ReelForge includes a built-in Grounded Evaluation framework to audit extraction quality:
+
+```bash
+# Evaluate a single Brain Object
+python -m evaluation.runner --reel DZAqhTjN6-R
+
+# Evaluate the entire active valid library
+python -m evaluation.runner --all
+
+# View an aggregate evaluation report
+python -m evaluation.runner --report run_20260904_224410
+```
+
+### 7 Evaluation Dimensions (0–100 Normalized Score):
+1. **Category Accuracy** (0–10): Dominant-purpose classification correctness.
+2. **Grounding & Factuality** (0–20): Absence of hallucinations or fabricated URLs/tools.
+3. **Completeness** (0–15): Coverage of all key steps, ingredients, settings, and takeaways.
+4. **Summary / Insight Quality** (0–15): Clarity, conciseness, and high-density summary.
+5. **Structured Extraction Accuracy** (0–20): Category-specific schema population.
+6. **Tags / Tools / Resources** (0–10): Grounded entity and tool extraction.
+7. **Multimodal Utilization** (0–10 when applicable): Effective synthesis of audio and visual frame observations.
 
 ---
 
@@ -124,7 +151,7 @@ git clone https://github.com/your-username/ReelForge.git
 cd ReelForge
 ```
 
-### 2. Create and Activate a Virtual Environment
+### 2. Create and Activate Virtual Environment
 ```bash
 # Windows
 python -m venv venv
@@ -164,7 +191,7 @@ omniroute serve
 
 ## Configuration
 
-Copy the example environment file and add your credentials:
+Copy the example environment file and configure your credentials:
 
 ```bash
 cp .env.example .env
@@ -177,31 +204,10 @@ MICROSOFT_CLIENT_ID=your_microsoft_azure_app_client_id_here
 OMNIROUTE_BASE_URL=http://localhost:20128/v1
 OMNIROUTE_API_KEY=your_optional_omniroute_key
 TEXT_MODEL=gemini/gemini-3.1-flash-lite
+EVALUATION_MODEL=gemini/gemini-3.1-flash-lite
 VISION_MODEL=gemini/gemini-3.1-flash-lite
 VISION_MAX_FRAMES=8
 ```
-
-### Environment Variables Reference:
-* `OMNIROUTE_BASE_URL`: OpenAI-compatible endpoint URL for OmniRoute (default: `http://localhost:20128/v1`).
-* `OMNIROUTE_API_KEY`: Optional Bearer token for OmniRoute gateway.
-* `TEXT_MODEL`: Model identifier for text categorization and knowledge extraction.
-* `VISION_MODEL`: Model identifier for visual frame analysis.
-* `VISION_MAX_FRAMES`: Maximum representative video frames sampled per reel (default: `8`).
-* `FFMPEG_PATH`: Optional explicit path to FFmpeg `bin/` directory (if not present in system PATH).
-
----
-
-## Microsoft OneNote First-Run Authentication
-
-ReelForge uses MSAL (Microsoft Authentication Library) with device-code / interactive OAuth flow.
-
-1. On the very first run, ReelForge will prompt you in the console:
-   ```text
-   To sign in, use a web browser to open the page https://microsoft.com/devicelogin and enter the code XXXXXXXX to authenticate.
-   ```
-2. Open the URL, enter the code, and sign in with your Microsoft account.
-3. Once authenticated, tokens are cached locally in `token_cache.bin` (which is excluded from Git).
-4. ReelForge will automatically create an **"InstaBrain"** notebook in OneNote and generate section tabs for each category.
 
 ---
 
@@ -212,87 +218,22 @@ Start the Telegram bot listener:
 ```bash
 python bot/telegram_bot.py
 ```
-Open Telegram, find your bot, and send `/start`. Then paste any Instagram Reel link.
+Open Telegram, find your bot, send `/start`, and paste any Instagram Reel link.
 
 ### CLI Mode: Single Reel Ingestion
-To process a single reel directly from the command line:
+To process a single Reel directly from the command line:
 ```bash
 python main.py "https://www.instagram.com/reel/EXAMPLE_CODE/"
 ```
 
 ---
 
-## Project Structure
+## Running Tests
 
-```text
-ReelForge/
-├── bot/
-│   ├── __init__.py
-│   └── telegram_bot.py           # Telegram bot handler & message loop
-├── download/
-│   ├── __init__.py
-│   └── downloader.py             # yt-dlp video downloader & metadata extractor
-├── processing/
-│   ├── __init__.py
-│   ├── pipeline.py               # End-to-end orchestration pipeline
-│   ├── llm_client.py             # Centralized OpenAI-compatible text LLM client
-│   ├── vision_analyzer.py        # FFmpeg frame sampling & OmniRoute vision analyzer
-│   ├── categorizer.py            # Category classification engine
-│   ├── dispatcher.py             # Route category to specific extractor
-│   ├── transcriber.py            # Whisper audio transcription
-│   ├── ai_extractor.py           # AI category extractor
-│   ├── finance_extractor.py      # Finance category extractor
-│   ├── food_extractor.py         # Food category extractor
-│   ├── gym_extractor.py          # Gym category extractor
-│   ├── movies_edits_extractor.py # Movies & Edits extractor
-│   ├── other_extractor.py        # General fallback extractor
-│   ├── photography_extractor.py  # Photography extractor
-│   ├── productivity_extractor.py # Productivity extractor
-│   ├── programming_extractor.py  # Programming extractor
-│   └── travel_extractor.py       # Travel extractor
-├── prompts/                      # 12 production system prompts
-│   ├── categorizer.txt
-│   ├── vision_analyzer.txt
-│   └── *_extractor.txt
-├── storage/
-│   ├── __init__.py
-│   └── brain_object.py           # Brain Object JSON schema builder
-├── onenote/
-│   ├── __init__.py
-│   ├── graph_client.py           # MS Graph API client & token cache
-│   ├── formatter.py              # HTML template formatter for OneNote
-│   ├── sanitizer.py              # Microsoft Graph title sanitizer (Error 20153 fix)
-│   └── writer.py                 # Notebook/section resolver & page publisher
-├── evaluation/                   # Standalone LLM evaluation benchmark suite
-│   ├── evaluate.py
-│   ├── judge_prompt.txt
-│   ├── RUBRIC.md
-│   └── test_cases/
-├── examples/                     # Sanitized example Brain Object JSONs
-│   ├── programming_example.json
-│   └── food_example.json
-├── config.py                     # Global configuration & environment loader
-├── main.py                       # CLI entry point
-├── requirements.txt              # Production Python dependencies
-├── .env.example                  # Environment variable template
-└── .gitignore                    # Secrets, caches & runtime media exclusions
+Run the complete regression test suite:
+```bash
+python -m unittest scratch/test_evaluation_unit.py scratch/test_v26_layer1.py scratch/test_v26_layer1_bot.py scratch/test_v26_layer2.py scratch/test_v26_layer2_bot.py scratch/test_v25_layer3_storage.py scratch/test_v25_layer3_bot.py scratch/test_v25_encoding.py scratch/test_escape_html.py
 ```
-
----
-
-## Evaluation Benchmark Suite
-
-The `evaluation/` directory contains an experimental, evidence-first evaluation engine. It audits generated Brain Objects against source reel evidence across hallucination resistance, recall, and category fidelity.
-
-> **Note**: The evaluation suite is an independent supporting tool and is not required for normal production execution.
-
----
-
-## Limitations & Accuracy
-
-* **Classification & Extraction Accuracy**: In controlled multi-category benchmarks, the prompt design achieves robust category classification. While highly accurate, edge-case reels with minimal speech and ambiguous captions may occasionally default to `Other`.
-* **Private Reels**: Reels from private accounts or age-restricted content cannot be retrieved without authenticated Instagram sessions.
-* **Audio Quality**: Background music or heavily distorted audio can impact transcription precision.
 
 ---
 

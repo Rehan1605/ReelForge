@@ -39,6 +39,7 @@ FFMPEG_PATH = os.getenv(
 )
 
 TEXT_MODEL = os.getenv("TEXT_MODEL", "qwen2.5:7b-instruct")
+EVALUATION_MODEL = os.getenv("EVALUATION_MODEL", TEXT_MODEL)
 VISION_MODEL = os.getenv("VISION_MODEL", "llama3.2-vision:latest")
 OMNIROUTE_BASE_URL = os.getenv("OMNIROUTE_BASE_URL", os.getenv("OPENAI_BASE_URL", "http://localhost:20128/v1"))
 OMNIROUTE_API_KEY = os.getenv("OMNIROUTE_API_KEY", os.getenv("OPENAI_API_KEY", "")).strip()
