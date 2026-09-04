@@ -20,7 +20,11 @@ from onenote.sanitizer import sanitize_page_title
 from processing.pipeline import process_reel
 from storage.brain_object import (
     archive_brain_object,
+    find_related_brain_objects,
+    get_all_topics,
     get_brain_categories,
+    get_brain_objects_by_creator,
+    get_brain_objects_by_topic,
     get_cached_brain_object,
     get_knowledge_stats,
     get_recent_brain_objects,
@@ -123,6 +127,31 @@ def _format_reel_card(brain: dict, index: int | None = None) -> str:
     )
 
 
+def _format_related_card(match: dict, index: int = 1) -> str:
+    brain = match.get("brain") or {}
+    reasons = match.get("reasons") or []
+    k = brain.get("knowledge") or {}
+    c = brain.get("content") or {}
+    cr = brain.get("creator") or {}
+    src = brain.get("source") or {}
+    reel_id = brain.get("id") or src.get("shortcode") or "Unknown"
+    caption = c.get("caption") or ""
+    title = k.get("title") or (
+        caption.splitlines()[0] if caption else src.get("shortcode", "Untitled")
+    )
+    category = k.get("category") or "Unknown"
+    username = cr.get("username")
+    creator_str = f"@{username}" if username else "Unknown creator"
+    reasons_str = " • ".join(reasons) if reasons else "Related topic"
+
+    return (
+        f"{index}. 🏷️ [{category}] {title}\n"
+        f"   🔗 Matched on: {reasons_str}\n"
+        f"   👤 {creator_str} | 🆔 `{reel_id}`\n"
+        f"   👉 Retrieve: /get {reel_id}"
+    )
+
+
 def _format_detailed_card(brain: dict) -> str:
     k = brain.get("knowledge") or {}
     c = brain.get("content") or {}
@@ -131,6 +160,7 @@ def _format_detailed_card(brain: dict) -> str:
     ts = brain.get("timestamps") or {}
     prov = brain.get("provenance") or {}
     caption = c.get("caption") or ""
+    reel_id = brain.get("id") or src.get("shortcode") or "Unknown"
     title = k.get("title") or (
         caption.splitlines()[0] if caption else src.get("shortcode", "Untitled")
     )
@@ -147,7 +177,7 @@ def _format_detailed_card(brain: dict) -> str:
         creator_str = "Unknown"
 
     processed_at = ts.get("processed_at") or "Unknown"
-    source_url = src.get("url") or f"https://www.instagram.com/reel/{brain.get('id')}/"
+    source_url = src.get("url") or f"https://www.instagram.com/reel/{reel_id}/"
     page_title = sanitize_page_title(title)
 
     modality = prov.get("modality")
@@ -192,7 +222,8 @@ def _format_detailed_card(brain: dict) -> str:
         "Notebook: InstaBrain\n"
         f"Section: {category}\n"
         f"Page: {page_title}\n\n"
-        f"🔗 Source Reel: {source_url}"
+        f"🔗 Source Reel: {source_url}\n"
+        f"👉 Discover Related: /related {reel_id}"
     )
 
 
@@ -208,13 +239,17 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "• /recent — View recent reels\n"
         "• /search <query> — Search by keywords\n"
         "• /category — Browse by category\n"
+        "• /topics — Browse all knowledge topics\n"
+        "• /topic <name> — Search reels by topic tag\n"
+        "• /creator <user> — Search reels by creator\n"
+        "• /related <id> — Discover related reels\n"
         "• /get <reel_id> — View full details & JSON\n"
         "• /stats — Knowledge base statistics\n"
-        "• /reprocess <reel_id> — Re-run full multimodal pipeline\n"
-        "• /force <url> — Ingest URL with cache bypass\n"
-        "• /recat <reel_id> <cat> — Change category locally\n"
-        "• /archive <reel_id> — Move Reel to archive\n"
-        "• /restore <reel_id> — Restore from archive\n"
+        "• /reprocess <id> — Re-run full pipeline\n"
+        "• /force <url> — Ingest with cache bypass\n"
+        "• /recat <id> <cat> — Change category\n"
+        "• /archive <id> — Move to archive\n"
+        "• /restore <id> — Restore from archive\n"
         "• /help — Full command guide"
     )
     await update.message.reply_text(welcome_text)
@@ -227,6 +262,10 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "• /recent [limit] — View latest processed reels (default 5, max 10)\n"
         "• /search <query> — Search reels by keyword, tag, or creator\n"
         "• /category [name] — Filter reels by category or list all categories\n"
+        "• /topics [limit] — List all discovered topics/tags across the library\n"
+        "• /topic <name> — Find reels matching an exact topic/tag\n"
+        "• /creator <username> — Find all reels by a specific creator\n"
+        "• /related <reel_id> — Find related reels sharing tags, tools, or creator\n"
         "• /get <reel_id> — View full knowledge card & download JSON\n"
         "• /stats — View library statistics and category breakdown\n\n"
         "⚡ Ingestion & Lifecycle Commands:\n"
@@ -678,6 +717,139 @@ async def recat_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"❌ {msg}")
 
 
+async def related_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not context.args:
+        await update.message.reply_text(
+            "⚠️ Please specify a Reel ID.\n\n"
+            "Example: /related DcK7QPXuRBJ\n\n"
+            "💡 Use /recent or /search to find Reel IDs."
+        )
+        return
+
+    target_id = context.args[0].strip()
+    brain = get_cached_brain_object(target_id)
+    if not brain:
+        matched = [
+            b for b in scan_valid_brain_objects()
+            if b.get("id") == target_id or (b.get("source") or {}).get("shortcode") == target_id
+        ]
+        if matched:
+            brain = matched[0]
+
+    if not brain:
+        await update.message.reply_text(
+            f"❌ Reel '{target_id}' not found in active library.\n\n"
+            "💡 Check the Reel ID with /recent or /search."
+        )
+        return
+
+    reel_id = brain.get("id") or target_id
+    related_matches = find_related_brain_objects(reel_id, limit=5)
+
+    if not related_matches:
+        await update.message.reply_text(
+            f"🔍 No related Reels found for '{reel_id}'.\n\n"
+            "💡 Use /topics to explore related themes."
+        )
+        return
+
+    k = brain.get("knowledge") or {}
+    title = k.get("title") or reel_id
+    cards = [_format_related_card(m, index=i + 1) for i, m in enumerate(related_matches)]
+    text = (
+        f"🔗 Related Reels for '{title}' ({len(related_matches)} found):\n\n"
+        + "\n\n".join(cards)
+        + "\n\n💡 Use /get <reel_id> to view full details."
+    )
+    await update.message.reply_text(text)
+
+
+async def topics_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    limit = 15
+    if context.args:
+        try:
+            limit = int(context.args[0])
+        except (ValueError, TypeError):
+            limit = 15
+    clamped_limit = max(1, min(limit, 50))
+
+    topics = get_all_topics()
+    if not topics:
+        await update.message.reply_text("🏷️ No knowledge topics found in the library yet.")
+        return
+
+    total_unique = len(topics)
+    shown_topics = topics[:clamped_limit]
+    lines = [f"• #{name} — {count} reel{'s' if count > 1 else ''}" for name, count in shown_topics]
+
+    text = (
+        f"🏷️ Knowledge Topics ({len(shown_topics)} of {total_unique} shown):\n\n"
+        + "\n".join(lines)
+        + "\n\n💡 To view reels for a topic: /topic <name>\n"
+        "Example: /topic productivity"
+    )
+    await update.message.reply_text(text)
+
+
+async def topic_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not context.args:
+        await update.message.reply_text(
+            "⚠️ Please specify a topic or tag.\n\n"
+            "Example: /topic productivity\n"
+            "Example: /topic python\n\n"
+            "💡 Use /topics to see all discovered topics."
+        )
+        return
+
+    topic_name = " ".join(context.args).strip()
+    clean_name = topic_name.lstrip("#")
+    brains = get_brain_objects_by_topic(topic_name, limit=10)
+
+    if not brains:
+        await update.message.reply_text(
+            f"🔍 No Reels found for topic '#{clean_name}'.\n\n"
+            "💡 Type /topics to browse all available topics."
+        )
+        return
+
+    cards = [_format_reel_card(b, index=i + 1) for i, b in enumerate(brains)]
+    text = (
+        f"🏷️ Reels tagged with #{clean_name} ({len(brains)} found):\n\n"
+        + "\n\n".join(cards)
+        + "\n\n💡 Use /get <reel_id> to view full details."
+    )
+    await update.message.reply_text(text)
+
+
+async def creator_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not context.args:
+        await update.message.reply_text(
+            "⚠️ Please specify a creator username.\n\n"
+            "Example: /creator Noor\n\n"
+            "💡 You can omit the leading '@'."
+        )
+        return
+
+    creator_name = " ".join(context.args).strip()
+    clean_name = creator_name.lstrip("@")
+    brains = get_brain_objects_by_creator(creator_name, limit=10)
+
+    if not brains:
+        await update.message.reply_text(
+            f"👤 No Reels found for creator '@{clean_name}'.\n\n"
+            "💡 Check the creator with /recent or /search."
+        )
+        return
+
+    cards = [_format_reel_card(b, index=i + 1) for i, b in enumerate(brains)]
+    text = (
+        f"👤 Reels by @{clean_name} ({len(brains)} found):\n\n"
+        + "\n\n".join(cards)
+        + "\n\n💡 Use /get <reel_id> to view full details."
+    )
+    await update.message.reply_text(text)
+
+
 def run_bot():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
@@ -687,6 +859,10 @@ def run_bot():
     app.add_handler(CommandHandler("recent", recent_command))
     app.add_handler(CommandHandler("search", search_command))
     app.add_handler(CommandHandler("category", category_command))
+    app.add_handler(CommandHandler("topics", topics_command))
+    app.add_handler(CommandHandler("topic", topic_command))
+    app.add_handler(CommandHandler("creator", creator_command))
+    app.add_handler(CommandHandler("related", related_command))
     app.add_handler(CommandHandler("get", get_command))
     app.add_handler(CommandHandler("stats", stats_command))
     app.add_handler(CommandHandler("force", force_command))

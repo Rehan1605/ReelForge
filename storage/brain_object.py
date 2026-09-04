@@ -750,3 +750,248 @@ def get_knowledge_stats() -> dict:
         "latest_reel_id": latest_id,
         "latest_title": latest_title,
     }
+
+
+# ---------------------------------------------------------------------------
+# Cross-Reel Knowledge Linking & Topic Discovery (Layer 2)
+# ---------------------------------------------------------------------------
+
+WEIGHT_SHARED_TAG = 3
+WEIGHT_SHARED_TOOL = 2
+WEIGHT_SAME_CREATOR = 2
+WEIGHT_SAME_CATEGORY = 1
+MIN_RELATED_SCORE = 2
+
+
+def _extract_tags_set(brain: dict) -> set[str]:
+    k = brain.get("knowledge") or {}
+    tags = k.get("tags") or []
+    out = set()
+    for t in tags:
+        if isinstance(t, str) and t.strip():
+            out.add(t.strip().lower().lstrip("#"))
+    main_topic = k.get("main_topic")
+    if isinstance(main_topic, str) and main_topic.strip():
+        out.add(main_topic.strip().lower().lstrip("#"))
+    return out
+
+
+def _extract_tools_set(brain: dict) -> set[str]:
+    k = brain.get("knowledge") or {}
+    out = set()
+    for key in ("tools", "apps", "websites", "models", "editing_apps", "gear", "cookware", "equipment"):
+        val = k.get(key)
+        if isinstance(val, list):
+            for item in val:
+                if isinstance(item, str) and item.strip():
+                    out.add(item.strip().lower())
+                elif isinstance(item, dict):
+                    for v in item.values():
+                        if isinstance(v, str) and v.strip():
+                            out.add(v.strip().lower())
+    return out
+
+
+def _extract_creator_normalized(brain: dict) -> str | None:
+    cr = brain.get("creator") or {}
+    username = cr.get("username")
+    if username and isinstance(username, str) and username.strip():
+        return username.strip().lower().lstrip("@")
+    return None
+
+
+def find_related_brain_objects(
+    reel_id: str,
+    limit: int = 5,
+) -> list[dict]:
+    """
+    Deterministically find active Brain Objects related to the specified reel_id.
+    Excludes the target reel itself and all archived reels.
+    Returns a list of dicts with keys:
+      - 'brain': The matched Brain Object dict
+      - 'score': The deterministic relevance score
+      - 'reasons': List of human-readable match reasons
+      - 'shared_tags': List of shared tag strings
+      - 'shared_tools': List of shared tool strings
+    Sorted deterministically:
+      1. score descending
+      2. shared_tags count descending
+      3. reel_id ascending (stable tie-breaker)
+    """
+    try:
+        limit_val = int(limit)
+    except (ValueError, TypeError):
+        limit_val = 5
+    clamped_limit = max(1, min(limit_val, 10))
+
+    if not reel_id or not isinstance(reel_id, str):
+        return []
+
+    active_brains = scan_valid_brain_objects()
+    target_brain = None
+    candidates = []
+
+    for b in active_brains:
+        if b.get("id") == reel_id:
+            target_brain = b
+        else:
+            candidates.append(b)
+
+    if not target_brain:
+        return []
+
+    target_tags = _extract_tags_set(target_brain)
+    target_tools = _extract_tools_set(target_brain)
+    target_creator = _extract_creator_normalized(target_brain)
+    target_cat = ((target_brain.get("knowledge") or {}).get("category") or "").strip().lower()
+
+    matches = []
+
+    for candidate in candidates:
+        cand_tags = _extract_tags_set(candidate)
+        cand_tools = _extract_tools_set(candidate)
+        cand_creator = _extract_creator_normalized(candidate)
+        cand_cat = ((candidate.get("knowledge") or {}).get("category") or "").strip().lower()
+
+        shared_tags = sorted(list(target_tags.intersection(cand_tags)))
+        shared_tools = sorted(list(target_tools.intersection(cand_tools)))
+        same_creator = bool(target_creator and cand_creator and target_creator == cand_creator)
+        same_category = bool(target_cat and cand_cat and target_cat == cand_cat)
+
+        score = (
+            WEIGHT_SHARED_TAG * len(shared_tags)
+            + WEIGHT_SHARED_TOOL * len(shared_tools)
+            + (WEIGHT_SAME_CREATOR if same_creator else 0)
+            + (WEIGHT_SAME_CATEGORY if same_category else 0)
+        )
+
+        if score < MIN_RELATED_SCORE:
+            continue
+
+        reasons = []
+        if shared_tags:
+            reasons.append(f"Shared tags: {', '.join('#' + t for t in shared_tags)}")
+        if shared_tools:
+            reasons.append(f"Shared tools: {', '.join(shared_tools)}")
+        if same_creator:
+            cr_display = (candidate.get("creator") or {}).get("username") or cand_creator
+            reasons.append(f"Same creator: @{cr_display}")
+        if same_category and (shared_tags or shared_tools or same_creator):
+            cat_display = (candidate.get("knowledge") or {}).get("category")
+            reasons.append(f"Category: {cat_display}")
+
+        matches.append({
+            "brain": candidate,
+            "score": score,
+            "reasons": reasons,
+            "shared_tags": shared_tags,
+            "shared_tools": shared_tools,
+            "same_creator": same_creator,
+            "same_category": same_category,
+        })
+
+    matches.sort(
+        key=lambda m: (
+            -m["score"],
+            -len(m["shared_tags"]),
+            m["brain"].get("id") or ""
+        )
+    )
+
+    return matches[:clamped_limit]
+
+
+def get_all_topics() -> list[tuple[str, int]]:
+    """
+    Return all unique tags/topics across active valid Brain Objects with reel counts.
+    Sorted deterministically:
+      1. count descending
+      2. topic name ascending
+    """
+    valid_brains = scan_valid_brain_objects()
+    counts: dict[str, int] = {}
+
+    for brain in valid_brains:
+        tags = _extract_tags_set(brain)
+        for t in tags:
+            counts[t] = counts.get(t, 0) + 1
+
+    sorted_topics = sorted(
+        counts.items(),
+        key=lambda item: (-item[1], item[0])
+    )
+    return sorted_topics
+
+
+def get_brain_objects_by_topic(topic: str, limit: int = 10) -> list[dict]:
+    """
+    Find all active Brain Objects tagged with or matching topic (case-insensitive exact tag match).
+    Sorted by processed_at descending, then reel_id ascending.
+    """
+    if not topic or not isinstance(topic, str):
+        return []
+
+    try:
+        limit_val = int(limit)
+    except (ValueError, TypeError):
+        limit_val = 10
+    clamped_limit = max(1, min(limit_val, 20))
+
+    cleaned_topic = topic.strip().lower().lstrip("#")
+    if not cleaned_topic:
+        return []
+
+    valid_brains = scan_valid_brain_objects()
+    matched = []
+
+    for brain in valid_brains:
+        tags = _extract_tags_set(brain)
+        if cleaned_topic in tags:
+            matched.append(brain)
+
+    matched.sort(
+        key=lambda b: (
+            _brain_sort_key(b) or "",
+            b.get("id") or ""
+        ),
+        reverse=True
+    )
+    return matched[:clamped_limit]
+
+
+def get_brain_objects_by_creator(creator: str, limit: int = 10) -> list[dict]:
+    """
+    Find all active Brain Objects by creator username or full_name (case-insensitive, normalized @).
+    Sorted by processed_at descending, then reel_id ascending.
+    """
+    if not creator or not isinstance(creator, str):
+        return []
+
+    try:
+        limit_val = int(limit)
+    except (ValueError, TypeError):
+        limit_val = 10
+    clamped_limit = max(1, min(limit_val, 20))
+
+    cleaned_creator = creator.strip().lower().lstrip("@")
+    if not cleaned_creator:
+        return []
+
+    valid_brains = scan_valid_brain_objects()
+    matched = []
+
+    for brain in valid_brains:
+        cand_user = _extract_creator_normalized(brain)
+        cr = brain.get("creator") or {}
+        full_name = (cr.get("full_name") or "").strip().lower().lstrip("@")
+        if cand_user == cleaned_creator or full_name == cleaned_creator:
+            matched.append(brain)
+
+    matched.sort(
+        key=lambda b: (
+            _brain_sort_key(b) or "",
+            b.get("id") or ""
+        ),
+        reverse=True
+    )
+    return matched[:clamped_limit]
