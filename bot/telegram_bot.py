@@ -19,10 +19,15 @@ from config import BOT_TOKEN, BRAINS_DIR, CATEGORIES
 from onenote.sanitizer import sanitize_page_title
 from processing.pipeline import process_reel
 from storage.brain_object import (
+    archive_brain_object,
     get_brain_categories,
     get_cached_brain_object,
     get_knowledge_stats,
     get_recent_brain_objects,
+    is_valid_instagram_url,
+    load_brain_object,
+    recategorize_brain_object,
+    restore_brain_object,
     scan_valid_brain_objects,
     search_brain_objects,
 )
@@ -124,6 +129,7 @@ def _format_detailed_card(brain: dict) -> str:
     cr = brain.get("creator") or {}
     src = brain.get("source") or {}
     ts = brain.get("timestamps") or {}
+    prov = brain.get("provenance") or {}
     caption = c.get("caption") or ""
     title = k.get("title") or (
         caption.splitlines()[0] if caption else src.get("shortcode", "Untitled")
@@ -143,6 +149,19 @@ def _format_detailed_card(brain: dict) -> str:
     processed_at = ts.get("processed_at") or "Unknown"
     source_url = src.get("url") or f"https://www.instagram.com/reel/{brain.get('id')}/"
     page_title = sanitize_page_title(title)
+
+    modality = prov.get("modality")
+    if not modality:
+        has_audio = bool(c.get("transcript"))
+        has_vision = bool(c.get("vision_analysis"))
+        if has_audio and has_vision:
+            modality = "multimodal"
+        elif has_audio:
+            modality = "audio_caption"
+        elif has_vision:
+            modality = "vision_caption"
+        else:
+            modality = "caption_only"
 
     key_takeaways = _first_available(
         k,
@@ -164,6 +183,7 @@ def _format_detailed_card(brain: dict) -> str:
         "🧠 Reel Knowledge Card\n\n"
         f"Title: {title}\n"
         f"Category: {category}\n"
+        f"Modality: {modality}\n"
         f"Creator: {creator_str}\n"
         f"Processed: {processed_at}\n\n"
         f"Summary:\n{summary}\n\n"
@@ -177,18 +197,24 @@ def _format_detailed_card(brain: dict) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Discovery Commands (Read-Only)
+# Discovery & Management Commands
 # ---------------------------------------------------------------------------
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     welcome_text = (
         "👋 Welcome to ReelForge (InstaBrain)!\n\n"
         "Send me any Instagram Reel URL to extract structured knowledge and save it to OneNote.\n\n"
-        "💡 Explore saved knowledge with:\n"
+        "💡 Discovery & Management Commands:\n"
         "• /recent — View recent reels\n"
         "• /search <query> — Search by keywords\n"
         "• /category — Browse by category\n"
+        "• /get <reel_id> — View full details & JSON\n"
         "• /stats — Knowledge base statistics\n"
+        "• /reprocess <reel_id> — Re-run full multimodal pipeline\n"
+        "• /force <url> — Ingest URL with cache bypass\n"
+        "• /recat <reel_id> <cat> — Change category locally\n"
+        "• /archive <reel_id> — Move Reel to archive\n"
+        "• /restore <reel_id> — Restore from archive\n"
         "• /help — Full command guide"
     )
     await update.message.reply_text(welcome_text)
@@ -196,13 +222,19 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     help_text = (
-        "🤖 ReelForge Knowledge Discovery Assistant\n\n"
-        "Discovery Commands:\n"
+        "🤖 ReelForge Knowledge Discovery & Management\n\n"
+        "🔍 Discovery Commands:\n"
         "• /recent [limit] — View latest processed reels (default 5, max 10)\n"
         "• /search <query> — Search reels by keyword, tag, or creator\n"
         "• /category [name] — Filter reels by category or list all categories\n"
-        "• /get <reel_id> — View full knowledge card & get Brain Object JSON\n"
-        "• /stats — View library statistics and category breakdown\n"
+        "• /get <reel_id> — View full knowledge card & download JSON\n"
+        "• /stats — View library statistics and category breakdown\n\n"
+        "⚡ Ingestion & Lifecycle Commands:\n"
+        "• /force <url> — Force-ingest a Reel URL (bypasses cache)\n"
+        "• /reprocess <reel_id> — Re-extract an existing Reel using its source URL\n"
+        "• /recat <reel_id> <category> — Change category and update schema locally\n"
+        "• /archive <reel_id> — Move Reel to archive (hides from discovery)\n"
+        "• /restore <reel_id> — Restore an archived Reel to active library\n"
         "• /help — Show this guide\n\n"
         "📥 Add New Reels:\n"
         "Paste any Instagram Reel link directly into this chat to process and save it to OneNote."
@@ -383,7 +415,7 @@ _PROCESS_LOCK = asyncio.Lock()
 async def receive(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = update.message.text.strip()
 
-    if "instagram.com" not in message.lower():
+    if not is_valid_instagram_url(message):
         await update.message.reply_text(
             "Please send a valid Instagram Reel link, or type /help for discovery commands."
         )
@@ -436,10 +468,220 @@ async def receive(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
 
 
+async def force_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not context.args:
+        await update.message.reply_text(
+            "⚠️ Please provide an Instagram Reel URL to force-process.\n\n"
+            "Example: /force https://www.instagram.com/reel/C14V0wutZzd/\n\n"
+            "💡 This intentionally bypasses cache and re-extracts the Reel."
+        )
+        return
+
+    url = context.args[0].strip()
+    if not is_valid_instagram_url(url):
+        await update.message.reply_text(
+            "❌ Invalid URL. Please provide a valid Instagram Reel link.\n\n"
+            "Example: /force https://www.instagram.com/reel/C14V0wutZzd/"
+        )
+        return
+
+    await update.message.reply_text(
+        "⚡ Force ingestion requested. Bypassing cache..."
+    )
+
+    loop = asyncio.get_running_loop()
+
+    def progress(message_text):
+        future = asyncio.run_coroutine_threadsafe(
+            update.message.reply_text(message_text),
+            loop
+        )
+        future.result()
+
+    async with _PROCESS_LOCK:
+        result = await asyncio.to_thread(process_reel, url, progress, True)
+
+    if not result["success"]:
+        await update.message.reply_text(
+            f"❌ Force processing failed: {result.get('error', 'Unknown error')}"
+        )
+        return
+
+    onenote_success = result.get("onenote_success", False)
+    onenote_error = result.get("onenote_error")
+    category = result.get("category") or "Unknown"
+
+    if onenote_success:
+        status_line = f"⚡ Force-Processed (Fresh Extraction)\n✅ OneNote Page Created in Section: {category}\n\n"
+    else:
+        status_line = f"⚡ Force-Processed (Fresh Extraction)\n⚠️ Saved to Brain Object, but OneNote publishing failed: {onenote_error}\n\n"
+
+    summary_text = status_line + _format_summary(result)
+    await update.message.reply_text(summary_text)
+
+    brain_path = result.get("brain_path")
+    if brain_path is not None and Path(brain_path).exists():
+        with open(brain_path, "rb") as f:
+            await update.message.reply_document(
+                document=f,
+                filename=Path(brain_path).name
+            )
+
+
+async def reprocess_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not context.args:
+        await update.message.reply_text(
+            "⚠️ Please specify a Reel ID to reprocess.\n\n"
+            "Example: /reprocess DcK7QPXuRBJ\n\n"
+            "💡 Use /recent or /search to find Reel IDs."
+        )
+        return
+
+    reel_id = context.args[0].strip()
+
+    try:
+        brain = load_brain_object(reel_id)
+    except FileNotFoundError:
+        await update.message.reply_text(
+            f"❌ Reel '{reel_id}' not found in active library.\n\n"
+            "💡 Check the Reel ID with /recent or /search."
+        )
+        return
+    except Exception as e:
+        await update.message.reply_text(
+            f"❌ Error loading Reel '{reel_id}': {e}"
+        )
+        return
+
+    source_info = brain.get("source") or {}
+    source_url = source_info.get("url")
+    if not is_valid_instagram_url(source_url):
+        await update.message.reply_text(
+            f"❌ Cannot reprocess Reel '{reel_id}': Original source Instagram URL is missing or invalid in Brain Object.\n\n"
+            "💡 Tip: Use /force <url> with the direct Instagram link instead."
+        )
+        return
+
+    await update.message.reply_text(
+        f"🔄 Reprocessing Reel `{reel_id}`...\n"
+        f"🔗 Source: {source_url}\n"
+        "Re-running Whisper, Vision, and LLM extraction..."
+    )
+
+    loop = asyncio.get_running_loop()
+
+    def progress(message_text):
+        future = asyncio.run_coroutine_threadsafe(
+            update.message.reply_text(message_text),
+            loop
+        )
+        future.result()
+
+    async with _PROCESS_LOCK:
+        result = await asyncio.to_thread(process_reel, source_url, progress, True)
+
+    if not result["success"]:
+        await update.message.reply_text(
+            f"❌ Reprocessing failed: {result.get('error', 'Unknown error')}"
+        )
+        return
+
+    onenote_success = result.get("onenote_success", False)
+    onenote_error = result.get("onenote_error")
+    category = result.get("category") or "Unknown"
+
+    if onenote_success:
+        status_line = f"🔄 Successfully Reprocessed `{reel_id}`\n✅ OneNote Page Created in Section: {category}\n\n"
+    else:
+        status_line = f"🔄 Successfully Reprocessed `{reel_id}`\n⚠️ Saved to Brain Object, but OneNote publishing failed: {onenote_error}\n\n"
+
+    summary_text = status_line + _format_summary(result)
+    await update.message.reply_text(summary_text)
+
+    brain_path = result.get("brain_path")
+    if brain_path is not None and Path(brain_path).exists():
+        with open(brain_path, "rb") as f:
+            await update.message.reply_document(
+                document=f,
+                filename=Path(brain_path).name
+            )
+
+
+async def archive_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not context.args:
+        await update.message.reply_text(
+            "⚠️ Please specify a Reel ID to archive.\n\n"
+            "Example: /archive DcK7QPXuRBJ\n\n"
+            "💡 Use /recent or /search to find Reel IDs."
+        )
+        return
+
+    reel_id = context.args[0].strip()
+    async with _PROCESS_LOCK:
+        success, msg = archive_brain_object(reel_id)
+
+    if success:
+        await update.message.reply_text(
+            f"📦 Reel `{reel_id}` archived successfully.\n\n"
+            "It will no longer appear in /recent, /search, /category, or /stats.\n"
+            f"💡 To restore it later: /restore {reel_id}"
+        )
+    else:
+        await update.message.reply_text(f"❌ {msg}")
+
+
+async def restore_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not context.args:
+        await update.message.reply_text(
+            "⚠️ Please specify a Reel ID to restore.\n\n"
+            "Example: /restore DcK7QPXuRBJ"
+        )
+        return
+
+    reel_id = context.args[0].strip()
+    async with _PROCESS_LOCK:
+        success, msg = restore_brain_object(reel_id)
+
+    if success:
+        await update.message.reply_text(
+            f"♻️ Reel `{reel_id}` restored successfully.\n\n"
+            "It is now active and will appear in discovery commands and cache checks.\n"
+            f"👉 View details: /get {reel_id}"
+        )
+    else:
+        await update.message.reply_text(f"❌ {msg}")
+
+
+async def recat_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not context.args or len(context.args) < 2:
+        valid_cats = ", ".join(CATEGORIES)
+        await update.message.reply_text(
+            "⚠️ Usage: /recat <reel_id> <category>\n\n"
+            "Example: /recat DcK7QPXuRBJ Food\n\n"
+            f"Available categories:\n{valid_cats}"
+        )
+        return
+
+    reel_id = context.args[0].strip()
+    new_category = " ".join(context.args[1:]).strip()
+
+    async with _PROCESS_LOCK:
+        success, msg, updated_brain = recategorize_brain_object(reel_id, new_category)
+
+    if success and updated_brain:
+        cat = updated_brain.get("knowledge", {}).get("category")
+        await update.message.reply_text(
+            f"🏷️ Category updated to '{cat}' for Reel `{reel_id}`.\n\n"
+            f"💡 Note: Knowledge metadata and schema have been updated locally. Use /reprocess {reel_id} if you want full multimodal knowledge re-extracted under the {cat} category."
+        )
+    else:
+        await update.message.reply_text(f"❌ {msg}")
+
+
 def run_bot():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
-    # Register discovery commands
+    # Register discovery & lifecycle commands
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("recent", recent_command))
@@ -447,6 +689,11 @@ def run_bot():
     app.add_handler(CommandHandler("category", category_command))
     app.add_handler(CommandHandler("get", get_command))
     app.add_handler(CommandHandler("stats", stats_command))
+    app.add_handler(CommandHandler("force", force_command))
+    app.add_handler(CommandHandler("reprocess", reprocess_command))
+    app.add_handler(CommandHandler("archive", archive_command))
+    app.add_handler(CommandHandler("restore", restore_command))
+    app.add_handler(CommandHandler("recat", recat_command))
 
     # Register URL ingestion handler (for non-command text)
     app.add_handler(

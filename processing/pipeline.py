@@ -4,12 +4,15 @@ from pathlib import Path
 from config import BRAINS_DIR, KEEP_VIDEOS, WORKSPACE_DIR
 from download.downloader import acquire_reel
 from storage.brain_object import (
+    compute_provenance,
     extract_reel_id_from_url,
     get_cached_brain_object,
     load_brain_object,
     load_latest_brain_object,
     update_category,
     update_knowledge,
+    update_provenance,
+    update_transcript,
 )
 
 
@@ -51,33 +54,34 @@ def _load_latest_brain_object():
     return load_latest_brain_object()
 
 
-def process_reel(url, progress_callback=None):
-    # 1. Check for valid existing Brain Object cache before downloading
-    candidate_id = extract_reel_id_from_url(url)
-    if candidate_id:
-        cached_brain = get_cached_brain_object(candidate_id)
-        if cached_brain is not None:
-            print(f"[OK] Reel '{candidate_id}' is already processed. Returning cached Brain Object.")
-            _notify(progress_callback, "Already Processed (Using Cached Knowledge)")
-            category = cached_brain.get("knowledge", {}).get("category")
-            knowledge = cached_brain.get("knowledge")
-            transcript = cached_brain.get("content", {}).get("transcript")
-            brain_path = Path(BRAINS_DIR) / f"{candidate_id}.json"
+def process_reel(url, progress_callback=None, force=False):
+    # 1. Check for valid existing Brain Object cache before downloading (only when force=False)
+    if not force:
+        candidate_id = extract_reel_id_from_url(url)
+        if candidate_id:
+            cached_brain = get_cached_brain_object(candidate_id)
+            if cached_brain is not None:
+                print(f"[OK] Reel '{candidate_id}' is already processed. Returning cached Brain Object.")
+                _notify(progress_callback, "Already Processed (Using Cached Knowledge)")
+                category = cached_brain.get("knowledge", {}).get("category")
+                knowledge = cached_brain.get("knowledge")
+                transcript = cached_brain.get("content", {}).get("transcript")
+                brain_path = Path(BRAINS_DIR) / f"{candidate_id}.json"
 
-            return {
-                "success": True,
-                "cached": True,
-                "onenote_success": True,
-                "onenote_error": None,
-                "brain": cached_brain,
-                "brain_path": brain_path,
-                "transcript": transcript,
-                "category": category,
-                "knowledge": knowledge,
-                "error": None,
-            }
+                return {
+                    "success": True,
+                    "cached": True,
+                    "onenote_success": True,
+                    "onenote_error": None,
+                    "brain": cached_brain,
+                    "brain_path": brain_path,
+                    "transcript": transcript,
+                    "category": category,
+                    "knowledge": knowledge,
+                    "error": None,
+                }
 
-    # 2. Normal execution for new or incomplete reels
+    # 2. Normal execution for new, incomplete, or forced reels
     reel_id = None
     try:
         _notify(progress_callback, "Downloading")
@@ -93,6 +97,11 @@ def process_reel(url, progress_callback=None):
             print(f"Starting transcription for reel {reel_id} ({video_path.name})...")
             transcript = transcribe_reel(video_path) or ""
             print("Transcription complete.")
+            if reel_id:
+                try:
+                    update_transcript(reel_id, transcript)
+                except Exception as te:
+                    print(f"Notice: Could not persist transcript: {te}")
         except Exception as e:
             print(f"Transcription Failed: {e}")
             transcript = ""
@@ -173,6 +182,13 @@ def process_reel(url, progress_callback=None):
                 "knowledge": None,
                 "error": f"Knowledge Extraction Failed: {e}",
             }
+
+        if reel_id:
+            try:
+                prov = compute_provenance(transcript=transcript, vision_analysis=vision_analysis)
+                brain = update_provenance(reel_id, prov)
+            except Exception as pe:
+                print(f"Notice: Could not persist provenance: {pe}")
 
         brain = load_brain_object(reel_id)
         category = brain.get("knowledge", {}).get("category")

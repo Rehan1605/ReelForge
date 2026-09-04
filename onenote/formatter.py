@@ -7,13 +7,36 @@ with inline CSS, visual callout cards, step-by-step instructions, code blocks,
 metadata headers, and source references.
 """
 
-from __future__ import annotations
-
 import os
 from datetime import datetime
-from html import escape
 from typing import Any
 from urllib.parse import urlsplit, urlunsplit
+
+
+def escape_html(value: Any) -> str:
+    """
+    Escape text for OneNote HTML/XHTML rendering.
+    Safely converts standard HTML special characters (&, <, >, ", ') and encodes
+    non-ASCII Unicode characters as decimal Numeric Character References (&#...;)
+    to prevent character encoding corruption (e.g. 'â' instead of '–', '1Â½' instead of '1½')
+    regardless of OneNote client code page or transmission encoding.
+    """
+    if value is None:
+        return ""
+    text = str(value)
+    text = (
+        text.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+        .replace("'", "&#x27;")
+    )
+    return "".join(f"&#{ord(c)};" if ord(c) > 127 else c for c in text)
+
+
+escape = escape_html
+
+
 
 # Curated harmonious color palettes for each category
 CATEGORY_THEMES: dict[str, dict[str, str]] = {

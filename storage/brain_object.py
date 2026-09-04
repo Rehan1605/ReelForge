@@ -5,6 +5,25 @@ from datetime import datetime
 from pathlib import Path
 
 from config import BRAINS_DIR, CATEGORIES, WORKSPACE_DIR
+from urllib.parse import urlparse
+
+
+def is_valid_instagram_url(url: str) -> bool:
+    """
+    Validate whether a given string is a valid Instagram URL.
+    """
+    if not url or not isinstance(url, str):
+        return False
+    try:
+        parsed = urlparse(url.strip())
+        if not parsed.scheme or not parsed.netloc:
+            return False
+        netloc = parsed.netloc.lower()
+        if netloc in ("instagram.com", "www.instagram.com", "instagr.am", "m.instagram.com") or netloc.endswith(".instagram.com"):
+            return True
+        return False
+    except Exception:
+        return False
 
 
 def extract_reel_id_from_url(url: str) -> str | None:
@@ -228,6 +247,13 @@ def create_brain_object(source_url, metadata=None):
         "timestamps": {
             "reel_created": metadata.get("upload_date"),
             "processed_at": datetime.now().isoformat(timespec="seconds")
+        },
+
+        "provenance": {
+            "extraction_version": "2.6.0",
+            "modality": "caption_only",
+            "has_audio_transcript": False,
+            "has_vision_analysis": False
         }
     }
 
@@ -239,6 +265,181 @@ def create_brain_object(source_url, metadata=None):
     print(f"Master JSON Created: {output}")
 
     return reel
+
+
+def compute_provenance(
+    transcript: str | None = None,
+    vision_analysis: dict | list | None = None,
+) -> dict:
+    """
+    Deterministically build provenance metadata based on actual available data.
+    """
+    has_audio = bool(transcript and isinstance(transcript, str) and transcript.strip())
+
+    has_vision = False
+    if isinstance(vision_analysis, dict):
+        has_vision = any(bool(v) for v in vision_analysis.values())
+    elif isinstance(vision_analysis, list):
+        has_vision = bool(vision_analysis)
+
+    if has_audio and has_vision:
+        modality = "multimodal"
+    elif has_audio:
+        modality = "audio_caption"
+    elif has_vision:
+        modality = "vision_caption"
+    else:
+        modality = "caption_only"
+
+    return {
+        "extraction_version": "2.6.0",
+        "modality": modality,
+        "has_audio_transcript": has_audio,
+        "has_vision_analysis": has_vision,
+    }
+
+
+def update_transcript(reel_id: str, transcript: str) -> dict:
+    """
+    Persist the audio transcript into the Brain Object content section.
+    """
+    brain_path = Path(BRAINS_DIR) / f"{reel_id}.json"
+
+    if not brain_path.exists():
+        raise FileNotFoundError(f"Brain Object not found: {brain_path}")
+
+    with open(brain_path, "r", encoding="utf-8") as f:
+        brain = json.load(f)
+
+    if "content" not in brain or not isinstance(brain["content"], dict):
+        brain["content"] = {}
+
+    brain["content"]["transcript"] = transcript
+    _atomic_write_json(brain_path, brain)
+
+    return brain
+
+
+def update_provenance(reel_id: str, provenance: dict) -> dict:
+    """
+    Update the root provenance metadata of a specific Brain Object by reel ID.
+    """
+    brain_path = Path(BRAINS_DIR) / f"{reel_id}.json"
+
+    if not brain_path.exists():
+        raise FileNotFoundError(f"Brain Object not found: {brain_path}")
+
+    with open(brain_path, "r", encoding="utf-8") as f:
+        brain = json.load(f)
+
+    brain["provenance"] = provenance
+    _atomic_write_json(brain_path, brain)
+
+    return brain
+
+
+def archive_brain_object(reel_id: str) -> tuple[bool, str]:
+    """
+    Move an active Brain Object from brains/<reel_id>.json to brains/archive/<reel_id>.json.
+    Excludes it from all discovery commands, stats, and cache lookups.
+    Safe: fails if active file does not exist, or if an archive collision already exists.
+    """
+    if not reel_id or not isinstance(reel_id, str):
+        return False, "Invalid Reel ID provided."
+
+    active_path = Path(BRAINS_DIR) / f"{reel_id}.json"
+    archive_dir = Path(BRAINS_DIR) / "archive"
+    archive_path = archive_dir / f"{reel_id}.json"
+
+    if not active_path.is_file():
+        return False, f"Reel '{reel_id}' not found in active library."
+
+    if archive_path.is_file():
+        return False, f"Archive collision: '{reel_id}' already exists in archive."
+
+    try:
+        archive_dir.mkdir(parents=True, exist_ok=True)
+        os.replace(active_path, archive_path)
+        return True, f"Reel '{reel_id}' successfully archived."
+    except Exception as e:
+        return False, f"Failed to archive Reel '{reel_id}': {e}"
+
+
+def restore_brain_object(reel_id: str) -> tuple[bool, str]:
+    """
+    Restore an archived Brain Object from brains/archive/<reel_id>.json back to brains/<reel_id>.json.
+    Safe: fails if archive file does not exist, or if active library collision already exists.
+    """
+    if not reel_id or not isinstance(reel_id, str):
+        return False, "Invalid Reel ID provided."
+
+    active_path = Path(BRAINS_DIR) / f"{reel_id}.json"
+    archive_path = Path(BRAINS_DIR) / "archive" / f"{reel_id}.json"
+
+    if not archive_path.is_file():
+        return False, f"Archived Reel '{reel_id}' not found in archive."
+
+    if active_path.is_file():
+        return False, f"Restore collision: Reel '{reel_id}' already exists in active library."
+
+    try:
+        Path(BRAINS_DIR).mkdir(parents=True, exist_ok=True)
+        os.replace(archive_path, active_path)
+        return True, f"Reel '{reel_id}' successfully restored to active library."
+    except Exception as e:
+        return False, f"Failed to restore Reel '{reel_id}': {e}"
+
+
+def recategorize_brain_object(reel_id: str, new_category: str) -> tuple[bool, str, dict | None]:
+    """
+    Manually update category and normalize knowledge schema without invoking an LLM.
+    Preserves summary, title, tags, and all valid existing knowledge fields.
+    """
+    if not reel_id or not isinstance(reel_id, str):
+        return False, "Invalid Reel ID provided.", None
+
+    if not new_category or not isinstance(new_category, str):
+        return False, "Invalid category provided.", None
+
+    # Normalize category name case-insensitively
+    matched_category = None
+    for cat in CATEGORIES:
+        if cat.lower() == new_category.strip().lower():
+            matched_category = cat
+            break
+
+    if not matched_category:
+        valid_list = ", ".join(CATEGORIES)
+        return False, f"Unknown category '{new_category}'. Valid categories are:\n{valid_list}", None
+
+    active_path = Path(BRAINS_DIR) / f"{reel_id}.json"
+    if not active_path.is_file():
+        return False, f"Reel '{reel_id}' not found in active library.", None
+
+    try:
+        with open(active_path, "r", encoding="utf-8") as f:
+            brain = json.load(f)
+    except Exception as e:
+        return False, f"Failed to read Brain Object '{reel_id}': {e}", None
+
+    if "knowledge" not in brain or not isinstance(brain["knowledge"], dict):
+        brain["knowledge"] = {"category": matched_category, "summary": "No summary available."}
+    else:
+        brain["knowledge"]["category"] = matched_category
+
+    # Normalize schema against destination category
+    try:
+        from processing.knowledge_schema import normalize_knowledge_schema
+        normalized = normalize_knowledge_schema(matched_category, brain["knowledge"])
+        brain["knowledge"] = normalized
+    except Exception as e:
+        return False, f"Schema normalization failed for category '{matched_category}': {e}", None
+
+    try:
+        _atomic_write_json(active_path, brain)
+        return True, f"Category updated to '{matched_category}'.", brain
+    except Exception as e:
+        return False, f"Failed to save updated Brain Object: {e}", None
 
 
 def load_brain_object(reel_id: str) -> dict:

@@ -1,6 +1,7 @@
 import os
 import re
-from html import escape
+from onenote.formatter import escape_html as escape
+
 
 import msal
 import requests
@@ -182,6 +183,7 @@ class GraphClient:
 <html lang="en-US">
 <head>
     <title>{escape(str(title))}</title>
+    <meta charset="utf-8" />
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
 </head>
 <body data-absolute-enabled="true" style="font-family:Calibri, Segoe UI, sans-serif; font-size:11pt">
@@ -189,6 +191,7 @@ class GraphClient:
 </body>
 </html>
 """
+
 
         endpoint = f"{GRAPH_BASE_URL}/me/onenote/sections/{section_id}/pages"
 
