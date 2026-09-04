@@ -1,4 +1,6 @@
 import json
+import os
+import tempfile
 from datetime import datetime
 from pathlib import Path
 
@@ -35,6 +37,31 @@ def _shortcode_from_metadata(source_url, metadata):
     return metadata.get("id")
 
 
+def _atomic_write_json(file_path: Path, data: dict):
+    """
+    Atomically write JSON data to file_path using a temporary file in the same directory.
+    Prevents partial/corrupted files if interrupted.
+    """
+    target = Path(file_path).resolve()
+    target.parent.mkdir(parents=True, exist_ok=True)
+
+    temp_fd, temp_path_str = tempfile.mkstemp(
+        dir=str(target.parent),
+        prefix=f"{target.stem}_tmp_",
+        suffix=".json",
+    )
+    temp_path = Path(temp_path_str)
+
+    try:
+        with os.fdopen(temp_fd, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=4)
+        os.replace(temp_path, target)
+    except Exception:
+        if temp_path.exists():
+            temp_path.unlink(missing_ok=True)
+        raise
+
+
 def create_brain_object(source_url, metadata=None):
     if metadata is None:
         metadata_file = _latest_file("*.info.json")
@@ -42,11 +69,25 @@ def create_brain_object(source_url, metadata=None):
         with open(metadata_file, "r", encoding="utf-8") as f:
             metadata = json.load(f)
 
-    mp4_file = _latest_file("*.mp4")
-    thumbnail_file = _latest_thumbnail()
     shortcode = _shortcode_from_metadata(source_url, metadata)
     reel_id = metadata.get("id") or shortcode
     caption = metadata.get("description") or ""
+
+    # Locate reel-specific media if available, fallback to latest
+    target_mp4 = Path(WORKSPACE_DIR) / f"{reel_id}.mp4"
+    if target_mp4.is_file():
+        mp4_file = target_mp4
+    else:
+        mp4_file = _latest_file("*.mp4")
+
+    thumbnail_file = None
+    for ext in ("jpg", "jpeg", "png", "webp"):
+        candidate = Path(WORKSPACE_DIR) / f"{reel_id}.{ext}"
+        if candidate.is_file():
+            thumbnail_file = candidate
+            break
+    if not thumbnail_file:
+        thumbnail_file = _latest_thumbnail()
 
     # Build Master JSON
     reel = {
@@ -97,17 +138,27 @@ def create_brain_object(source_url, metadata=None):
         }
     }
 
-    # Save
+    # Save atomically
     Path(BRAINS_DIR).mkdir(exist_ok=True)
-
     output = Path(BRAINS_DIR) / f"{reel_id}.json"
-
-    with open(output, "w", encoding="utf-8") as f:
-        json.dump(reel, f, indent=4)
+    _atomic_write_json(output, reel)
 
     print(f"Master JSON Created: {output}")
 
     return reel
+
+
+def load_brain_object(reel_id: str) -> dict:
+    """
+    Load a specific Brain Object by its reel ID.
+    """
+    brain_path = Path(BRAINS_DIR) / f"{reel_id}.json"
+
+    if not brain_path.exists():
+        raise FileNotFoundError(f"Brain Object not found: {brain_path}")
+
+    with open(brain_path, "r", encoding="utf-8") as f:
+        return json.load(f)
 
 
 def update_category(reel_id, category):
@@ -117,9 +168,7 @@ def update_category(reel_id, category):
         brain = json.load(f)
 
     brain["knowledge"]["category"] = category
-
-    with open(brain_path, "w", encoding="utf-8") as f:
-        json.dump(brain, f, indent=4)
+    _atomic_write_json(brain_path, brain)
 
     return brain
 
@@ -133,11 +182,14 @@ def update_latest_category(category):
     return update_category(brain_path.stem, category)
 
 
-def update_latest_knowledge(knowledge: dict):
-    brain_path = max(
-        Path(BRAINS_DIR).glob("*.json"),
-        key=lambda f: f.stat().st_mtime
-    )
+def update_knowledge(reel_id: str, knowledge: dict) -> dict:
+    """
+    Update the knowledge section of a specific Brain Object by reel ID.
+    """
+    brain_path = Path(BRAINS_DIR) / f"{reel_id}.json"
+
+    if not brain_path.exists():
+        raise FileNotFoundError(f"Brain Object not found: {brain_path}")
 
     with open(brain_path, "r", encoding="utf-8") as f:
         brain = json.load(f)
@@ -157,10 +209,18 @@ def update_latest_knowledge(knowledge: dict):
     if existing_category and not brain["knowledge"].get("category"):
         brain["knowledge"]["category"] = existing_category
 
-    with open(brain_path, "w", encoding="utf-8") as f:
-        json.dump(brain, f, indent=4)
+    _atomic_write_json(brain_path, brain)
 
     return brain
+
+
+def update_latest_knowledge(knowledge: dict):
+    brain_path = max(
+        Path(BRAINS_DIR).glob("*.json"),
+        key=lambda f: f.stat().st_mtime
+    )
+
+    return update_knowledge(brain_path.stem, knowledge)
 
 
 def update_latest_programming_knowledge(knowledge):
@@ -177,9 +237,7 @@ def update_vision_analysis(reel_id, vision_analysis: dict):
         brain["content"] = {}
 
     brain["content"]["vision_analysis"] = vision_analysis
-
-    with open(brain_path, "w", encoding="utf-8") as f:
-        json.dump(brain, f, indent=4)
+    _atomic_write_json(brain_path, brain)
 
     return brain
 
@@ -202,5 +260,4 @@ def load_latest_brain_object():
         key=lambda f: f.stat().st_mtime
     )
 
-    with open(brain_path, "r", encoding="utf-8") as f:
-        return json.load(f)
+    return load_brain_object(brain_path.stem)

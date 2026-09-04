@@ -69,7 +69,7 @@ class GraphClient:
             if used_interactive and self.cache.has_state_changed:
                 with open(TOKEN_CACHE_FILE, "w", encoding="utf-8") as f:
                     f.write(self.cache.serialize())
-            print("✅ Microsoft authentication successful.")
+            print("[OK] Microsoft authentication successful.")
             return
 
         raise Exception(result.get("error_description") or result.get("error"))

@@ -1,18 +1,41 @@
 import traceback
 from pathlib import Path
 
-from config import BRAINS_DIR
+from config import BRAINS_DIR, KEEP_VIDEOS, WORKSPACE_DIR
 from download.downloader import acquire_reel
 from storage.brain_object import (
+    load_brain_object,
     load_latest_brain_object,
-    update_latest_category,
-    update_latest_knowledge,
+    update_category,
+    update_knowledge,
 )
 
 
 def _notify(progress_callback, message):
     if progress_callback is not None:
         progress_callback(message)
+
+
+def _cleanup_reel_media(reel_id: str | None):
+    """
+    Remove local media files belonging to this specific reel if KEEP_VIDEOS is False.
+    Never deletes Brain Objects or files belonging to other reels.
+    """
+    if KEEP_VIDEOS or not reel_id:
+        return
+
+    reels_dir = Path(WORKSPACE_DIR)
+    if not reels_dir.exists():
+        return
+
+    for pattern in (f"{reel_id}.*", f"{reel_id}*.*"):
+        for file in reels_dir.glob(pattern):
+            if file.is_file():
+                try:
+                    file.unlink()
+                    print(f"Cleaned up reel media file: {file.name}")
+                except Exception as e:
+                    print(f"Notice: Could not unlink {file.name}: {e}")
 
 
 def _latest_brain_path():
@@ -27,26 +50,49 @@ def _load_latest_brain_object():
 
 
 def process_reel(url, progress_callback=None):
+    reel_id = None
     try:
         _notify(progress_callback, "Downloading")
-        acquire_reel(url)
+        brain = acquire_reel(url)
+        reel_id = brain.get("id")
+        video_path = Path(brain.get("media", {}).get("video_path", ""))
+        caption = brain.get("content", {}).get("caption", "") or ""
 
-        from processing.transcriber import transcribe_latest_reel
+        from processing.transcriber import transcribe_reel
 
         try:
             _notify(progress_callback, "Transcribing")
-            print("Starting transcription...")
-            transcript = transcribe_latest_reel() or ""
+            print(f"Starting transcription for reel {reel_id} ({video_path.name})...")
+            transcript = transcribe_reel(video_path) or ""
             print("Transcription complete.")
         except Exception as e:
             print(f"Transcription Failed: {e}")
             transcript = ""
 
-        print("Loading latest Brain Object...")
-        brain = _load_latest_brain_object()
-        print("Brain Object loaded.")
-        caption = brain.get("content", {}).get("caption", "") or ""
-        vision_analysis = brain.get("content", {}).get("vision_analysis")
+        from processing.vision_analyzer import analyze_vision
+
+        vision_analysis = None
+        try:
+            _notify(progress_callback, "Analyzing Video Frames")
+            print(f"Starting vision analysis for reel {reel_id}...")
+            vision_analysis = analyze_vision(
+                video_path=video_path,
+                caption=caption,
+                transcript=transcript,
+                update_brain=True,
+                reel_id=reel_id,
+            )
+            print("Vision analysis complete.")
+        except Exception as e:
+            print(f"Vision Analysis Failed (proceeding without vision): {e}")
+            if reel_id:
+                try:
+                    current_brain = load_brain_object(reel_id)
+                    vision_analysis = current_brain.get("content", {}).get("vision_analysis")
+                except Exception:
+                    vision_analysis = None
+            else:
+                vision_analysis = None
 
         from processing.categorizer import categorize
 
@@ -55,17 +101,18 @@ def process_reel(url, progress_callback=None):
             print("Categorizing...")
             category = categorize(caption, transcript)
             print(f"Category: {category}")
-            print("Updating category...")
-            brain = update_latest_category(category)
+            print(f"Updating category for reel {reel_id}...")
+            brain = update_category(reel_id, category)
             print("Category updated.")
         except Exception as e:
             print(f"Categorization Failed: {e}")
+            brain_path = (Path(BRAINS_DIR) / f"{reel_id}.json") if reel_id else None
             return {
                 "success": False,
                 "onenote_success": False,
                 "onenote_error": None,
-                "brain": _load_latest_brain_object(),
-                "brain_path": _latest_brain_path(),
+                "brain": load_brain_object(reel_id) if (brain_path and brain_path.exists()) else None,
+                "brain_path": brain_path if (brain_path and brain_path.exists()) else None,
                 "transcript": transcript,
                 "category": None,
                 "knowledge": None,
@@ -81,24 +128,25 @@ def process_reel(url, progress_callback=None):
             print("Dispatching extractor...")
             knowledge = dispatch(category, caption, transcript, vision_analysis=vision_analysis)
             print("Extractor completed.")
-            print("Updating Brain Object knowledge...")
-            brain = update_latest_knowledge(knowledge)
+            print(f"Updating Brain Object knowledge for reel {reel_id}...")
+            brain = update_knowledge(reel_id, knowledge)
             print("Knowledge updated.")
         except Exception as e:
             print(f"Knowledge Extraction Failed: {e}")
+            brain_path = (Path(BRAINS_DIR) / f"{reel_id}.json") if reel_id else None
             return {
                 "success": False,
                 "onenote_success": False,
                 "onenote_error": None,
-                "brain": _load_latest_brain_object(),
-                "brain_path": _latest_brain_path(),
+                "brain": load_brain_object(reel_id) if (brain_path and brain_path.exists()) else None,
+                "brain_path": brain_path if (brain_path and brain_path.exists()) else None,
                 "transcript": transcript,
                 "category": category,
                 "knowledge": None,
                 "error": f"Knowledge Extraction Failed: {e}",
             }
 
-        brain = _load_latest_brain_object()
+        brain = load_brain_object(reel_id)
         category = brain.get("knowledge", {}).get("category")
 
         onenote_success = False
@@ -116,18 +164,18 @@ def process_reel(url, progress_callback=None):
                 writer = OneNoteWriter()
                 writer.write(brain)
                 onenote_success = True
-                print("✅ OneNote page created successfully.")
+                print("[OK] OneNote page created successfully.")
             except Exception as e:
                 onenote_success = False
                 onenote_error = str(e)
-                print(f"⚠️ OneNote publishing failed: {e}")
+                print(f"[WARN] OneNote publishing failed: {e}")
 
-        brain_path = _latest_brain_path()
+        brain_path = Path(BRAINS_DIR) / f"{reel_id}.json"
 
         if onenote_success:
-            print("✅ Pipeline completed successfully (OneNote published).")
+            print("[OK] Pipeline completed successfully (OneNote published).")
         else:
-            print(f"⚠️ Pipeline completed extraction, but OneNote failed: {onenote_error}")
+            print(f"[WARN] Pipeline completed extraction, but OneNote failed: {onenote_error}")
 
         return {
             "success": True,
@@ -144,14 +192,17 @@ def process_reel(url, progress_callback=None):
     except Exception as e:
         traceback.print_exc()
         print(f"Pipeline Failed: {e}")
+        brain_path = (Path(BRAINS_DIR) / f"{reel_id}.json") if reel_id else None
         return {
             "success": False,
             "onenote_success": False,
             "onenote_error": None,
-            "brain": None,
-            "brain_path": None,
+            "brain": load_brain_object(reel_id) if (brain_path and brain_path.exists()) else None,
+            "brain_path": brain_path if (brain_path and brain_path.exists()) else None,
             "transcript": None,
             "category": None,
             "knowledge": None,
             "error": str(e),
         }
+    finally:
+        _cleanup_reel_media(reel_id)

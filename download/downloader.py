@@ -39,7 +39,6 @@ def _download_with_ytdlp(url):
 
 def acquire_reel(url):
     print(f"\nDownloading: {url}")
-    clear_workspace()
 
     metadata = _download_with_ytdlp(url)
 

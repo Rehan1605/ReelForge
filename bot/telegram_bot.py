@@ -82,6 +82,9 @@ def _format_summary(result):
     )
 
 
+_PROCESS_LOCK = asyncio.Lock()
+
+
 async def receive(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = update.message.text.strip()
 
@@ -104,7 +107,8 @@ async def receive(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         future.result()
 
-    result = await asyncio.to_thread(process_reel, message, progress)
+    async with _PROCESS_LOCK:
+        result = await asyncio.to_thread(process_reel, message, progress)
 
     if not result["success"]:
         await update.message.reply_text(

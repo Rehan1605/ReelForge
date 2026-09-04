@@ -43,9 +43,8 @@ def _normalize_category(raw: str) -> str:
             if inner_lower in _CATEGORY_LOOKUP:
                 return _CATEGORY_LOOKUP[inner_lower]
 
-    # Model returned something unrecognised — fall back to Other
-    print(f"Warning: categorizer returned unrecognised value {repr(raw)!s}. Defaulting to 'Other'.")
-    return "Other"
+    # Model returned something unrecognised — raise error rather than silently defaulting to Other
+    raise ValueError(f"Categorizer returned unrecognized category: {repr(raw)}")
 
 
 def categorize(caption, transcript):

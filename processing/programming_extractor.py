@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from processing.knowledge_schema import normalize_knowledge_schema
 from processing.llm_client import generate_json
 from processing.vision_analyzer import format_vision_analysis
 
@@ -20,6 +21,7 @@ def extract_programming_knowledge(caption, transcript, vision_analysis=None):
     )
 
     try:
-        return generate_json(prompt)
+        raw_json = generate_json(prompt)
+        return normalize_knowledge_schema("Programming", raw_json)
     except ValueError as e:
-        raise ValueError("Programming extractor returned invalid JSON.") from e
+        raise ValueError(f"Programming extractor returned invalid output: {e}") from e

@@ -12,6 +12,23 @@ import whisper
 model = whisper.load_model(WHISPER_MODEL)
 
 
+def transcribe_reel(video_path: Path | str) -> str:
+    video_file = Path(video_path).resolve()
+
+    if not video_file.is_file():
+        raise FileNotFoundError(f"Video file not found: {video_file}")
+
+    print(f"Transcribing audio from {video_file.name}...")
+
+    result = model.transcribe(str(video_file))
+
+    transcript = result["text"].strip()
+
+    print("Transcription Complete!")
+
+    return transcript
+
+
 def transcribe_latest_reel():
     reels_folder = Path(WORKSPACE_DIR)
 
@@ -20,12 +37,4 @@ def transcribe_latest_reel():
         key=lambda f: f.stat().st_mtime
     )
 
-    print("Transcribing audio...")
-
-    result = model.transcribe(str(mp4_file))
-
-    transcript = result["text"].strip()
-
-    print("Transcription Complete!")
-
-    return transcript
+    return transcribe_reel(mp4_file)
