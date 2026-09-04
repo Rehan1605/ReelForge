@@ -354,3 +354,198 @@ def load_latest_brain_object():
     )
 
     return load_brain_object(brain_path.stem)
+
+
+def scan_valid_brain_objects() -> list[dict]:
+    """
+    Scan and load all fully valid Brain Objects from BRAINS_DIR.
+    Safely ignores malformed, partial, or corrupted files.
+    Read-only: does not modify any files or acquire ingestion locks.
+    """
+    brains_dir = Path(BRAINS_DIR)
+    if not brains_dir.exists():
+        return []
+
+    valid_brains = []
+    for json_file in brains_dir.glob("*.json"):
+        try:
+            with open(json_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if is_valid_brain_object(data):
+                valid_brains.append(data)
+        except Exception:
+            # Skip unparseable or corrupted files safely
+            continue
+
+    return valid_brains
+
+
+def _brain_sort_key(brain: dict) -> str:
+    """Extract a standardized chronological sort key for a Brain Object."""
+    timestamps = brain.get("timestamps") or {}
+    processed_at = timestamps.get("processed_at")
+    if isinstance(processed_at, str) and processed_at.strip():
+        return processed_at.strip()
+    reel_created = timestamps.get("reel_created")
+    if isinstance(reel_created, str) and reel_created.strip():
+        return reel_created.strip()
+    return ""
+
+
+def get_recent_brain_objects(limit: int = 5) -> list[dict]:
+    """
+    Retrieve valid Brain Objects sorted by processed timestamp descending.
+    Limit is clamped between 1 and 10 (default 5).
+    """
+    try:
+        limit_val = int(limit)
+    except (ValueError, TypeError):
+        limit_val = 5
+    clamped_limit = max(1, min(limit_val, 10))
+
+    valid_brains = scan_valid_brain_objects()
+    valid_brains.sort(key=_brain_sort_key, reverse=True)
+    return valid_brains[:clamped_limit]
+
+
+def _extract_searchable_text(brain: dict) -> str:
+    """
+    Extract useful knowledge and metadata text for deterministic search matching.
+    Includes title, summary, tags, topic, key concepts, creator, and category-specific fields.
+    """
+    k = brain.get("knowledge") or {}
+    c = brain.get("content") or {}
+    cr = brain.get("creator") or {}
+    src = brain.get("source") or {}
+    parts = []
+
+    # Direct string fields
+    for s in (
+        k.get("title"),
+        k.get("summary"),
+        k.get("main_topic"),
+        k.get("category"),
+        cr.get("username"),
+        cr.get("full_name"),
+        c.get("caption"),
+        c.get("transcript"),
+        src.get("shortcode"),
+        brain.get("id"),
+    ):
+        if s and isinstance(s, str):
+            parts.append(s.lower())
+
+    # Category-specific structured list fields
+    list_keys = (
+        "tags", "key_concepts", "key_takeaways", "tools", "apps", "models",
+        "websites", "dishes", "ingredients", "cuisine", "cookware", "steps",
+        "exercises", "muscles", "equipment", "workout_type", "form_cues",
+        "destinations", "attractions", "hotels", "restaurants", "transport",
+        "methods", "workflows", "habits", "shortcuts", "stocks", "funds",
+        "movies", "shows", "songs", "gear", "techniques", "editing_tools",
+        "editing_apps", "transitions", "effects", "best_practices",
+        "mistakes_to_avoid", "action_items", "code_snippets", "prompts",
+        "use_cases", "key_points", "tips", "recommendations", "risks"
+    )
+    for key in list_keys:
+        val = k.get(key)
+        if isinstance(val, list):
+            for item in val:
+                if isinstance(item, str) and item:
+                    parts.append(item.lower())
+                elif isinstance(item, dict):
+                    for dv in item.values():
+                        if isinstance(dv, str) and dv:
+                            parts.append(dv.lower())
+
+    return " ".join(parts)
+
+
+def search_brain_objects(query: str = "", category: str | None = None, limit: int = 5) -> list[dict]:
+    """
+    Perform deterministic, case-insensitive keyword search across valid Brain Objects.
+    If category is supplied, filters by normalized category first.
+    Limit is clamped between 1 and 10 (default 5).
+    """
+    try:
+        limit_val = int(limit)
+    except (ValueError, TypeError):
+        limit_val = 5
+    clamped_limit = max(1, min(limit_val, 10))
+
+    valid_brains = scan_valid_brain_objects()
+
+    # Category filter
+    if category and isinstance(category, str) and category.strip():
+        target_cat = category.strip().lower()
+        valid_brains = [
+            b for b in valid_brains
+            if ((b.get("knowledge") or {}).get("category") or "").strip().lower() == target_cat
+        ]
+
+    # Keyword filter
+    cleaned_query = (query or "").strip().lower()
+    if cleaned_query:
+        tokens = [t for t in cleaned_query.split() if t]
+        matched = []
+        for brain in valid_brains:
+            searchable_text = _extract_searchable_text(brain)
+            if all(token in searchable_text for token in tokens):
+                matched.append(brain)
+        valid_brains = matched
+
+    # Sort newest first
+    valid_brains.sort(key=_brain_sort_key, reverse=True)
+    return valid_brains[:clamped_limit]
+
+
+def get_brain_categories() -> dict[str, int]:
+    """
+    Return a category-to-count mapping for all valid Brain Objects.
+    Preserves config CATEGORIES ordering.
+    """
+    valid_brains = scan_valid_brain_objects()
+    counts = {cat: 0 for cat in CATEGORIES}
+
+    for brain in valid_brains:
+        cat = (brain.get("knowledge") or {}).get("category") or "Other"
+        if cat in counts:
+            counts[cat] += 1
+        else:
+            counts[cat] = 1
+
+    return counts
+
+
+def get_knowledge_stats() -> dict:
+    """
+    Aggregate statistics across all valid Brain Objects in the knowledge base.
+    """
+    valid_brains = scan_valid_brain_objects()
+    category_counts = get_brain_categories()
+
+    unique_tags = set()
+    for brain in valid_brains:
+        tags = (brain.get("knowledge") or {}).get("tags") or []
+        for tag in tags:
+            if isinstance(tag, str) and tag.strip():
+                unique_tags.add(tag.strip().lower())
+
+    latest_brain = max(valid_brains, key=_brain_sort_key) if valid_brains else None
+    latest_ts = None
+    latest_id = None
+    latest_title = None
+
+    if latest_brain:
+        latest_ts = _brain_sort_key(latest_brain) or None
+        latest_id = latest_brain.get("id")
+        latest_title = (latest_brain.get("knowledge") or {}).get("title")
+
+    return {
+        "total_reels": len(valid_brains),
+        "category_counts": category_counts,
+        "unique_tags_count": len(unique_tags),
+        "latest_processed_at": latest_ts,
+        "latest_reel_id": latest_id,
+        "latest_title": latest_title,
+    }
