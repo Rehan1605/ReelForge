@@ -4,7 +4,7 @@
     "source": {
         "platform": "instagram",
         "url": "https://www.instagram.com/reel/Db564cDMqH-/?utm_source=ig_web_copy_link&igsh=MzRlODBiNWFlZA==",
-        "shortcode": "?utm_source=ig_web_copy_link&igsh=MzRlODBiNWFlZA=="
+        "shortcode": "Db564cDMqH-"
     },
     "creator": {
         "username": "Omkar",
@@ -18,8 +18,61 @@
     },
     "content": {
         "caption": "Learn how to explain it properly in an interview. \n\nInterviewers want to understand your problem-solving, decisions and technical depth.\n\nStructure your answers like this \ud83d\udc47\n\n1\ufe0f\u20e3 STAR \u2014 Tell your project story\n\nUse when they ask: \u201cTell me about your project.\u201d\n\nS \u2014 Situation: Explain the problem, context or need.\nT \u2014 Task: Define what you were responsible for.\nA \u2014 Action: Focus on what YOU did  implementation, decisions, challenges and problem solving.\nR \u2014 Result: Explain the outcome. Mention measurable impact or results when relevant.\n\n\u26a0\ufe0f Keep Action as the biggest part.\n\n2\ufe0f\u20e3 PREP \u2014 Explain technical decisions\n\nUse when they ask: \u201cWhy did you use X?\u201d\n\nP \u2014 Point: State your decision.\nR \u2014 Reason: Explain the technical reasoning.\nE \u2014 Evidence: Support it with requirements, constraints or results.\nP \u2014 Point: Connect it back to the project requirement.\n\nThe important part is WHY, not just WHAT.\n\n3\ufe0f\u20e3 PROBLEM \u2192 APPROACH \u2192 TRADE-OFF\n\nUse for architecture and technology questions.\n\nExplain:\n\n\u2192 What problem were you solving?\n\u2192 What approaches did you consider?\n\u2192 What did you choose and why?\n\u2192 What limitations did it have?\n\u2192 What trade-offs did you accept?\n\nThis shows intentional decision-making.\n\n4\ufe0f\u20e3 ARCHITECTURE \u2192 FLOW \u2192 FAILURE\n\nUse when the interviewer goes deeper technically.\n\nArchitecture: Major components and how they communicate.\nFlow: What happens from user action to response/data change.\nFailure: What happens when something goes wrong API failure, database failure, invalid input, timeout, duplicate requests, etc.\n\nThis tests your system understanding.\n\n5\ufe0f\u20e3 OWNERSHIP \u2014 Know what YOU did\n\nFor team projects, be ready to explain:\n\n\u2192 Your responsibilities\n\u2192 Your technical contributions\n\u2192 Decisions you made\n\u2192 Problems you solved\n\u2192 How your work connects with the rest of the system\n\nNever claim work you can\u2019t defend technically.\n\n6\ufe0f\u20e3 DEFEND YOUR DECISIONS\n\nFor every important technology or architecture choice, be ready for:\n\nWhat? \u2192 Why? \u2192 Alternatives? \u2192 Trade-off? \u2192 What would you change now?\n\nA strong project explanation isn\u2019t a memorized speech.\nIt\u2019s being able to",
-        "transcript": null,
-        "vision_analysis": null
+        "transcript": "",
+        "vision_analysis": {
+            "visual_summary": "A person is working at a desk in a dimly lit room, utilizing a dual-screen setup consisting of a large monitor and a laptop. The monitor displays code within an IDE and project management documentation, while the person is seen writing in a notebook with a pen.",
+            "on_screen_text": [
+                "The project explanation formula every student should know...",
+                "Explorer",
+                "stress-to-skill-main",
+                "data",
+                "components",
+                "notesData.ts",
+                "export interface NotesPDF",
+                "export const notesPDFs: NotesPDF[]",
+                "id: 'c-programming'",
+                "title: 'C Programming Language'",
+                "id: 'css-professional'",
+                "title: 'CSS for Professionals'",
+                "id: 'dbms'",
+                "title: 'Database Management Systems'",
+                "Expanding Stress-to-Skill Roadmaps",
+                "Product Management (PM) Roadmap Completion",
+                "Digital Marketing Roadmap Completion",
+                "UI/UX Consistency Fixes",
+                "Domain Verification",
+                "Files Updated"
+            ],
+            "visible_objects": [
+                "Computer monitor",
+                "Laptop",
+                "Notebook",
+                "Pen",
+                "Desk"
+            ],
+            "visible_entities": [
+                "Person (hand and arm only)"
+            ],
+            "visible_steps": [
+                "The video frames are static; no sequential actions or steps are demonstrated."
+            ],
+            "visible_code": [
+                "export interface NotesPDF { category: string; description: string; pages: string; color: string; icon: string; }",
+                "export const notesPDFs: NotesPDF[] = [ { id: 'c-programming', title: 'C Programming Language', ... }, { id: 'css-professional', title: 'CSS for Professionals', ... }, { id: 'dbms', title: 'Database Management Systems', ... } ]"
+            ],
+            "visible_settings": [],
+            "visual_facts": [
+                "The environment is dimly lit.",
+                "The user is utilizing a multi-display workstation.",
+                "The code displayed on the monitor is written in TypeScript.",
+                "The person is actively writing in a notebook."
+            ],
+            "uncertainties": [
+                "The specific brand or model of the laptop and monitor is not visible.",
+                "The text on the laptop screen is blurry and illegible.",
+                "The identity of the person is not visible."
+            ]
+        }
     },
     "media": {
         "video_path": "reels\\Db564cDMqH-.mp4",
@@ -27,52 +80,64 @@
         "duration": null
     },
     "knowledge": {
-        "title": "Interview Preparation: Structuring Your Answers and Defending Your Decisions",
-        "summary": "Learn how to structure your answers during an interview by using the STAR, PREP, PROBLEM \u2192 APPROACH \u2192 TRADE-OFF, ARCHITECTURE \u2192 FLOW \u2192 FAILURE, OWNERSHIP, and DEFEND YOUR DECISIONS frameworks. This will help you demonstrate your problem-solving skills, technical depth, and decision-making processes.",
+        "title": "Structured Frameworks for Software Engineering Interviews",
+        "summary": "This guide provides structured frameworks for answering technical interview questions regarding projects, architecture, and decision-making. It outlines specific methods like STAR, PREP, and systematic approaches to explaining technical choices and system design.",
+        "key_takeaways": [],
         "main_topic": "Interview Preparation",
         "difficulty": "Intermediate",
         "key_concepts": [
-            "STAR framework",
-            "PREP framework",
-            "PROBLEM \u2192 APPROACH \u2192 TRADE-OFF framework",
-            "ARCHITECTURE \u2192 FLOW \u2192 FAILURE",
-            "OWNERSHIP",
-            "DEFEND YOUR DECISIONS"
+            "STAR Method",
+            "PREP Method",
+            "System Architecture",
+            "Technical Decision Making",
+            "Project Ownership",
+            "Trade-off Analysis",
+            "System Flow",
+            "Failure Handling"
         ],
         "resources": [],
-        "tools": [
-            "VS Code",
-            "Postman",
-            "Cursor"
-        ],
+        "tools": [],
         "code_snippets": [],
         "best_practices": [
-            "Keep your answer focused on what you did, not just what you used."
+            "Use the STAR method (Situation, Task, Action, Result) when asked about projects.",
+            "Keep the 'Action' portion the largest part of your STAR response.",
+            "Use the PREP method (Point, Reason, Evidence, Point) when explaining technical decisions.",
+            "Focus on the 'Why' behind your decisions rather than just the 'What'.",
+            "Use the Problem-Approach-Trade-off framework for architecture and technology questions.",
+            "Use the Architecture-Flow-Failure framework for deep technical questions.",
+            "Be prepared to explain your specific responsibilities, contributions, and decisions in team projects.",
+            "Be ready to discuss alternatives and trade-offs for your technology choices."
         ],
         "mistakes_to_avoid": [
-            "Never claim work you can\u2019t defend technically.",
-            "Don't memorize a speech, but be able to explain your decisions and actions."
+            "Do not memorize speeches for project explanations.",
+            "Never claim work you cannot defend technically."
         ],
         "action_items": [
-            "Practice using the STAR framework",
-            "Review the PREP framework",
-            "Learn about the PROBLEM \u2192 APPROACH \u2192 TRADE-OFF framework",
-            "Understand architecture and technology questions",
-            "Be ready to defend your decisions"
+            "Prepare a project story using the STAR framework.",
+            "Practice explaining technical decisions using the PREP framework.",
+            "Prepare to discuss the architecture, data flow, and failure points of your projects.",
+            "Review your past projects to identify your specific responsibilities and contributions.",
+            "Reflect on your technology choices to answer: What, Why, Alternatives, Trade-off, and What would you change now?"
         ],
         "tags": [
             "interview preparation",
-            "STAR framework",
-            "PREP framework",
-            "PROBLEM \u2192 APPROACH \u2192 TRADE-OFF",
-            "architectural design",
-            "system understanding",
-            "technical depth"
+            "software engineering",
+            "system design",
+            "career",
+            "technical interview",
+            "star method",
+            "prep method"
         ],
         "category": "Programming"
     },
     "timestamps": {
         "reel_created": "20260811",
-        "processed_at": "2026-08-12T20:54:11"
+        "processed_at": "2026-09-04T22:30:49"
+    },
+    "provenance": {
+        "extraction_version": "2.6.0",
+        "modality": "vision_caption",
+        "has_audio_transcript": false,
+        "has_vision_analysis": true
     }
 }

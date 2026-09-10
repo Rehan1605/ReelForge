@@ -9,3 +9,5 @@ preview.html
 *.zip
 brains/
 evaluation/results/
+atlas-credentials.env
+scratch/

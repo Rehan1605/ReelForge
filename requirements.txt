@@ -3,3 +3,5 @@ yt-dlp
 requests
 msal
 python-telegram-bot>=20.0
+pymongo>=4.6.0
+dnspython>=2.4.0

@@ -18,8 +18,75 @@
     },
     "content": {
         "caption": "If I had to relearn coding from scratch in 2026, this is the exact roadmap I\u2019d follow. Comment \u201cCode\u201d and I\u2019ll send you every resource. \n\n#ai #tech #coding #student #university",
-        "transcript": null,
-        "vision_analysis": null
+        "transcript": "If I started from scratch, this is how I would really learn coding in 2026. First, learn Python. It's easy, you can build basically anything with it, and once you know Python, every other programming language is easier to pick up. But a theory, you can do the Harvard CS50 course. It's free and it teaches you how code actually works. In parallel, you can do the free code compitons certificate, so you're actually coding from day one. Once you got the basics down, you should immediately start applying them to small projects. For that, you can visit the GitHub repo, build your own eggs, and pick out a project that you like. Most of the projects can be done in just a couple of days, and I would recommend doing at least one a week. Once the projects get bigger, I would also start to pick up on things like system, design, and version control with Git. For that, you can check out this tutorial on version control, and the system design primer repo on GitHub. And in 2026, you can't skip AI, so finish with Google's machine learning crash course. It's free and it covers all the basics, just enough to understand what's actually going on. You can pair that with Anthropics AI fluency course, so you know how to actually work with models like Cloud on your projects. And yes, AI can definitely write most of the code for you in 2026. But the people shipping actually work in projects are still the ones who understand what's going on. AI makes you faster, but it doesn't replace understanding. Comment code and I'll send you the full roadmap with every resource. Good luck and follow for more.",
+        "vision_analysis": {
+            "visual_summary": "The video features a young man presenting a coding roadmap, alternating between direct-to-camera segments and screen recordings of various educational resources. The screen recordings display Harvard CS50 courses, a GitHub README, a YouTube tutorial, and a Machine Learning course page, while the presenter demonstrates actions like writing in a notebook, using a tablet, and typing on a laptop.",
+            "on_screen_text": [
+                "learn",
+                "course.",
+                "immediately",
+                "recommend",
+                "version",
+                "basics,",
+                "definitely",
+                "understanding.",
+                "Find the right CS50 course for you",
+                "CS50x",
+                "CS50AI",
+                "CS50W",
+                "README",
+                "Git & GitHub Crash Course 2025",
+                "Traversy Media",
+                "Machine Learning",
+                "Linear Regression",
+                "Logistic Regression",
+                "Classification"
+            ],
+            "visible_objects": [
+                "Microphone",
+                "Computer monitors",
+                "Laptop",
+                "Notebook",
+                "Pen",
+                "Tablet",
+                "Stylus",
+                "Glasses"
+            ],
+            "visible_entities": [
+                "Young male presenter",
+                "Python logo",
+                "Harvard University logo",
+                "YouTube logo",
+                "GitHub logo",
+                "Traversy Media"
+            ],
+            "visible_steps": [
+                "Presenter speaks to the camera while holding a microphone.",
+                "Screen recording displays Harvard CS50 course options.",
+                "Presenter writes in a notebook with a pen.",
+                "Screen recording displays a GitHub README with project lists.",
+                "Presenter writes on a tablet with a stylus.",
+                "Screen recording displays a YouTube tutorial for Git & GitHub.",
+                "Presenter types on a laptop keyboard.",
+                "Screen recording displays a Machine Learning course page.",
+                "Presenter types on a laptop keyboard."
+            ],
+            "visible_code": [
+                "Blurry code snippets visible on the background computer monitors."
+            ],
+            "visible_settings": [],
+            "visual_facts": [
+                "The presenter is a young male wearing glasses and a black t-shirt.",
+                "The video alternates between a home office setting and screen recordings.",
+                "The presenter uses both a physical notebook and a digital tablet for note-taking.",
+                "The screen recordings show specific educational platforms including Harvard, GitHub, YouTube, and a Machine Learning site."
+            ],
+            "uncertainties": [
+                "The specific code visible on the background monitors is too blurry to read.",
+                "The exact brand/model of the laptop and tablet is not identifiable.",
+                "The specific URL or platform name for the 'Machine Learning' course is not fully visible."
+            ]
+        }
     },
     "media": {
         "video_path": "reels\\DZAqhTjN6-R.mp4",
@@ -28,83 +95,106 @@
     },
     "knowledge": {
         "title": "2026 Coding Roadmap",
-        "summary": "A step-by-step guide to learning coding from scratch in 2026, covering Python, AI, system design, and version control.",
-        "main_topic": "Coding Education",
+        "summary": "A comprehensive roadmap for learning to code in 2026, emphasizing Python, foundational theory, project-based learning, and AI literacy. The approach balances theoretical knowledge with practical application and version control.",
+        "key_takeaways": [
+            "Python is the recommended starting language due to its versatility and ease of learning.",
+            "Combine theoretical learning with practical coding exercises from day one.",
+            "Consistent project building is essential for skill development.",
+            "AI tools should be used to increase speed, but they do not replace the need for deep understanding.",
+            "System design and version control are critical skills for larger projects."
+        ],
+        "main_topic": "Programming Roadmap",
         "difficulty": "Beginner",
         "key_concepts": [
-            "Python",
-            "System Design",
-            "Version Control with Git",
-            "Machine Learning",
-            "AI Fluency"
+            "Python programming",
+            "Computer science theory",
+            "Project-based learning",
+            "System design",
+            "Version control",
+            "Machine learning",
+            "AI fluency"
         ],
         "resources": [
             {
-                "name": "Harvard CS50 course",
+                "name": "Harvard CS50",
                 "type": "Course",
-                "url": "https://cs50.harvard.edu/"
-            },
-            {
-                "name": "Free Code Competitions certificate",
-                "type": "Certificate",
                 "url": ""
             },
             {
-                "name": "GitHub repo",
-                "type": "Repository",
+                "name": "freeCodeCamp",
+                "type": "Course",
                 "url": ""
             },
             {
-                "name": "Tutorial on version control",
-                "type": "Documentation",
-                "url": ""
-            },
-            {
-                "name": "System Design Primer Repo on GitHub",
-                "type": "Repository",
+                "name": "System Design Primer",
+                "type": "GitHub",
                 "url": ""
             },
             {
                 "name": "Google's Machine Learning Crash Course",
                 "type": "Course",
-                "url": "https://developers.google.com/machine-learning/crash-course"
+                "url": ""
             },
             {
-                "name": "Anthropics AI Fluency Course",
+                "name": "Anthropic's AI Fluency Course",
                 "type": "Course",
+                "url": ""
+            },
+            {
+                "name": "Git & GitHub Crash Course 2025 (Traversy Media)",
+                "type": "YouTube",
                 "url": ""
             }
         ],
         "tools": [
             "Python",
-            "GitHub",
             "Git",
-            "Cloud",
-            "Postman"
+            "GitHub",
+            "Claude"
         ],
         "code_snippets": [],
         "best_practices": [
-            "Learn Python first to make it easier to pick up other languages."
+            "Learn Python first to make other languages easier to pick up.",
+            "Learn theory and practice coding in parallel.",
+            "Build small projects immediately after learning the basics.",
+            "Aim to complete at least one project per week.",
+            "Understand the underlying concepts rather than relying solely on AI."
         ],
         "mistakes_to_avoid": [
-            "Don't skip AI and machine learning in your education.",
-            "Avoid trying to memorize code without understanding the basics."
+            "Do not skip learning about AI in 2026.",
+            "Do not rely on AI to replace your own understanding of code."
         ],
         "action_items": [
-            "Practice building small projects",
-            "Visit GitHub repo for inspiration"
+            "Learn Python.",
+            "Take the Harvard CS50 course.",
+            "Complete the freeCodeCamp certificate.",
+            "Build small projects weekly.",
+            "Learn system design.",
+            "Learn version control with Git.",
+            "Study the system design primer repo on GitHub.",
+            "Take Google's machine learning crash course.",
+            "Take Anthropic's AI fluency course."
         ],
         "tags": [
-            "codingeducation",
-            "pythonprogramming",
-            "aiandmlearning",
-            "systemdesign",
-            "versioncontrolgit"
+            "coding",
+            "roadmap",
+            "python",
+            "ai",
+            "software engineering",
+            "cs50",
+            "git",
+            "system design"
         ],
         "category": "Programming"
     },
     "timestamps": {
         "reel_created": "20260531",
-        "processed_at": "2026-08-12T20:26:28"
+        "processed_at": "2026-09-04T21:12:37"
+    },
+    "provenance": {
+        "extraction_version": "2.6.0",
+        "modality": "multimodal",
+        "has_audio_transcript": true,
+        "has_vision_analysis": true
     }
 }

@@ -2,8 +2,8 @@ import os
 from pathlib import Path
 
 
-def _load_env_file():
-    env_path = Path(".env")
+def _load_env_file(file_path: str = ".env"):
+    env_path = Path(file_path)
 
     if not env_path.exists():
         return
@@ -27,11 +27,15 @@ def _required_env(name):
     return value
 
 
-_load_env_file()
+_load_env_file(".env")
+_load_env_file("atlas-credentials.env")
 
 MICROSOFT_CLIENT_ID = _required_env("MICROSOFT_CLIENT_ID")
 
 BOT_TOKEN = _required_env("TELEGRAM_BOT_TOKEN")
+
+MONGODB_URI = os.getenv("MONGODB_URI", "").strip()
+MONGODB_DB_NAME = os.getenv("MONGODB_DB_NAME", "reelforge").strip()
 
 FFMPEG_PATH = os.getenv(
     "FFMPEG_PATH",
