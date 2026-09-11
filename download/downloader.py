@@ -37,13 +37,13 @@ def _download_with_ytdlp(url):
         return ydl.extract_info(url, download=True)
 
 
-def acquire_reel(url):
+def acquire_reel(url, user_id: str | None = None):
     print(f"\nDownloading: {url}")
 
     metadata = _download_with_ytdlp(url)
 
     print("Download Complete!")
-    return create_brain_object(url, metadata)
+    return create_brain_object(url, metadata, user_id=user_id)
 
 
 def download_reel(url):

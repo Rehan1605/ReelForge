@@ -228,12 +228,57 @@ def _format_detailed_card(brain: dict) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Multi-User Identity Resolution Helper
+# ---------------------------------------------------------------------------
+
+def _resolve_user(update: Update) -> tuple[dict | None, bool]:
+    """
+    Extract the authenticated Telegram user from update.effective_user and
+    resolve or create their ReelForge account.
+    Never accepts or trusts telegram_id from user input.
+    """
+    effective_user = getattr(update, "effective_user", None)
+    if not update or not effective_user:
+        return None, False
+    telegram_id = getattr(effective_user, "id", None)
+    if not isinstance(telegram_id, (int, str)):
+        return None, False
+    try:
+        from storage.user import get_or_create_user
+        return get_or_create_user(effective_user)
+    except Exception as e:
+        print(f"Notice: User resolution failed: {e}")
+        return None, False
+
+
+# ---------------------------------------------------------------------------
 # Discovery & Management Commands
 # ---------------------------------------------------------------------------
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user, is_new = _resolve_user(update)
+    effective_user = getattr(update, "effective_user", None)
+
+    first_name = ""
+    if user and isinstance(user, dict):
+        profile = user.get("profile") or {}
+        telegram_info = user.get("telegram") or {}
+        first_name = profile.get("display_name") or telegram_info.get("first_name") or ""
+    elif effective_user and getattr(effective_user, "first_name", None):
+        first_name = effective_user.first_name
+
+    first_name = str(first_name).strip()
+    greeting_name = f", {first_name}" if first_name else ""
+
+    if is_new or user is None:
+        header = f"👋 Welcome to ReelForge{greeting_name}!"
+        if is_new:
+            header += "\n✨ Your account has been registered."
+    else:
+        header = f"👋 Welcome back to ReelForge{greeting_name}!"
+
     welcome_text = (
-        "👋 Welcome to ReelForge (InstaBrain)!\n\n"
+        f"{header}\n\n"
         "Send me any Instagram Reel URL to extract structured knowledge and save it to OneNote.\n\n"
         "💡 Discovery & Management Commands:\n"
         "• /recent — View recent reels\n"
@@ -282,6 +327,8 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def recent_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user, _ = _resolve_user(update)
+    user_id = (user or {}).get("user_id")
     limit = 5
     if context.args:
         try:
@@ -290,9 +337,9 @@ async def recent_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             limit = 5
     limit = max(1, min(limit, 10))
 
-    brains = get_recent_brain_objects(limit=limit)
+    brains = get_recent_brain_objects(limit=limit, user_id=user_id)
     if not brains:
-        await update.message.reply_text("📚 No processed reels found in the library yet.")
+        await update.message.reply_text("📚 No saved reels found in your library yet. Send me a Reel URL to get started!")
         return
 
     cards = [_format_reel_card(b, index=i + 1) for i, b in enumerate(brains)]
@@ -305,6 +352,8 @@ async def recent_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def search_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user, _ = _resolve_user(update)
+    user_id = (user or {}).get("user_id")
     if not context.args:
         await update.message.reply_text(
             "⚠️ Please provide a search query.\n\n"
@@ -315,7 +364,7 @@ async def search_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     query = " ".join(context.args).strip()
-    brains = search_brain_objects(query=query, limit=10)
+    brains = search_brain_objects(query=query, limit=10, user_id=user_id)
     if not brains:
         await update.message.reply_text(
             f'🔍 No reels found matching "{query}".\n\n'
@@ -333,8 +382,10 @@ async def search_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def category_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user, _ = _resolve_user(update)
+    user_id = (user or {}).get("user_id")
     if not context.args:
-        counts = get_brain_categories()
+        counts = get_brain_categories(user_id=user_id)
         lines = [f"• {cat}: {count} reels" for cat, count in counts.items()]
         text = (
             "📂 ReelForge Categories:\n\n"
@@ -361,7 +412,7 @@ async def category_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    brains = search_brain_objects(query="", category=matched_category, limit=10)
+    brains = search_brain_objects(query="", category=matched_category, limit=10, user_id=user_id)
     if not brains:
         await update.message.reply_text(
             f"📂 No reels saved under category '{matched_category}' yet."
@@ -378,6 +429,8 @@ async def category_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def get_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user, _ = _resolve_user(update)
+    user_id = (user or {}).get("user_id")
     if not context.args:
         await update.message.reply_text(
             "⚠️ Please specify a Reel ID.\n\n"
@@ -387,10 +440,10 @@ async def get_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     target_id = context.args[0].strip()
-    brain = get_cached_brain_object(target_id)
+    brain = get_cached_brain_object(target_id, user_id=user_id)
     if not brain:
         matched = [
-            b for b in scan_valid_brain_objects()
+            b for b in scan_valid_brain_objects(user_id=user_id)
             if b.get("id") == target_id or (b.get("source") or {}).get("shortcode") == target_id
         ]
         if matched:
@@ -417,7 +470,9 @@ async def get_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    stats = get_knowledge_stats()
+    user, _ = _resolve_user(update)
+    user_id = (user or {}).get("user_id")
+    stats = get_knowledge_stats(user_id=user_id)
     total = stats["total_reels"]
     counts = stats["category_counts"]
     unique_tags = stats["unique_tags_count"]
@@ -452,6 +507,8 @@ _PROCESS_LOCK = asyncio.Lock()
 
 
 async def receive(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user, _ = _resolve_user(update)
+    user_id = (user or {}).get("user_id")
     message = update.message.text.strip()
 
     if not is_valid_instagram_url(message):
@@ -474,7 +531,7 @@ async def receive(update: Update, context: ContextTypes.DEFAULT_TYPE):
         future.result()
 
     async with _PROCESS_LOCK:
-        result = await asyncio.to_thread(process_reel, message, progress)
+        result = await asyncio.to_thread(process_reel, message, progress, False, user_id)
 
     if not result["success"]:
         await update.message.reply_text(
@@ -508,6 +565,8 @@ async def receive(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def force_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user, _ = _resolve_user(update)
+    user_id = (user or {}).get("user_id")
     if not context.args:
         await update.message.reply_text(
             "⚠️ Please provide an Instagram Reel URL to force-process.\n\n"
@@ -538,7 +597,7 @@ async def force_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         future.result()
 
     async with _PROCESS_LOCK:
-        result = await asyncio.to_thread(process_reel, url, progress, True)
+        result = await asyncio.to_thread(process_reel, url, progress, True, user_id)
 
     if not result["success"]:
         await update.message.reply_text(
@@ -568,6 +627,8 @@ async def force_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def reprocess_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user, _ = _resolve_user(update)
+    user_id = (user or {}).get("user_id")
     if not context.args:
         await update.message.reply_text(
             "⚠️ Please specify a Reel ID to reprocess.\n\n"
@@ -579,7 +640,13 @@ async def reprocess_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reel_id = context.args[0].strip()
 
     try:
-        brain = load_brain_object(reel_id)
+        brain = load_brain_object(reel_id, user_id=user_id)
+    except PermissionError:
+        await update.message.reply_text(
+            f"❌ Reel '{reel_id}' is not in your saved library.\n\n"
+            "💡 Use /recent or /search to find your saved Reels."
+        )
+        return
     except FileNotFoundError:
         await update.message.reply_text(
             f"❌ Reel '{reel_id}' not found in active library.\n\n"
@@ -617,7 +684,7 @@ async def reprocess_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         future.result()
 
     async with _PROCESS_LOCK:
-        result = await asyncio.to_thread(process_reel, source_url, progress, True)
+        result = await asyncio.to_thread(process_reel, source_url, progress, True, user_id)
 
     if not result["success"]:
         await update.message.reply_text(
@@ -647,6 +714,8 @@ async def reprocess_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def archive_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user, _ = _resolve_user(update)
+    user_id = (user or {}).get("user_id")
     if not context.args:
         await update.message.reply_text(
             "⚠️ Please specify a Reel ID to archive.\n\n"
@@ -657,7 +726,7 @@ async def archive_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     reel_id = context.args[0].strip()
     async with _PROCESS_LOCK:
-        success, msg = archive_brain_object(reel_id)
+        success, msg = archive_brain_object(reel_id, user_id=user_id)
 
     if success:
         await update.message.reply_text(
@@ -670,6 +739,8 @@ async def archive_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def restore_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user, _ = _resolve_user(update)
+    user_id = (user or {}).get("user_id")
     if not context.args:
         await update.message.reply_text(
             "⚠️ Please specify a Reel ID to restore.\n\n"
@@ -679,7 +750,7 @@ async def restore_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     reel_id = context.args[0].strip()
     async with _PROCESS_LOCK:
-        success, msg = restore_brain_object(reel_id)
+        success, msg = restore_brain_object(reel_id, user_id=user_id)
 
     if success:
         await update.message.reply_text(
@@ -692,6 +763,8 @@ async def restore_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def recat_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user, _ = _resolve_user(update)
+    user_id = (user or {}).get("user_id")
     if not context.args or len(context.args) < 2:
         valid_cats = ", ".join(CATEGORIES)
         await update.message.reply_text(
@@ -705,7 +778,7 @@ async def recat_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     new_category = " ".join(context.args[1:]).strip()
 
     async with _PROCESS_LOCK:
-        success, msg, updated_brain = recategorize_brain_object(reel_id, new_category)
+        success, msg, updated_brain = recategorize_brain_object(reel_id, new_category, user_id=user_id)
 
     if success and updated_brain:
         cat = updated_brain.get("knowledge", {}).get("category")
@@ -718,6 +791,8 @@ async def recat_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def related_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user, _ = _resolve_user(update)
+    user_id = (user or {}).get("user_id")
     if not context.args:
         await update.message.reply_text(
             "⚠️ Please specify a Reel ID.\n\n"
@@ -727,24 +802,25 @@ async def related_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     target_id = context.args[0].strip()
-    brain = get_cached_brain_object(target_id)
+    brain = get_cached_brain_object(target_id, user_id=user_id)
     if not brain:
         matched = [
-            b for b in scan_valid_brain_objects()
+            b for b in scan_valid_brain_objects(user_id=user_id)
             if b.get("id") == target_id or (b.get("source") or {}).get("shortcode") == target_id
         ]
         if matched:
             brain = matched[0]
 
     if not brain:
+        library_label = "your library" if user_id else "active library"
         await update.message.reply_text(
-            f"❌ Reel '{target_id}' not found in active library.\n\n"
+            f"❌ Reel '{target_id}' not found in {library_label}.\n\n"
             "💡 Check the Reel ID with /recent or /search."
         )
         return
 
     reel_id = brain.get("id") or target_id
-    related_matches = find_related_brain_objects(reel_id, limit=5)
+    related_matches = find_related_brain_objects(reel_id, limit=5, user_id=user_id)
 
     if not related_matches:
         await update.message.reply_text(
@@ -765,6 +841,8 @@ async def related_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def topics_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user, _ = _resolve_user(update)
+    user_id = (user or {}).get("user_id")
     limit = 15
     if context.args:
         try:
@@ -773,7 +851,7 @@ async def topics_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             limit = 15
     clamped_limit = max(1, min(limit, 50))
 
-    topics = get_all_topics()
+    topics = get_all_topics(user_id=user_id)
     if not topics:
         await update.message.reply_text("🏷️ No knowledge topics found in the library yet.")
         return
@@ -792,6 +870,8 @@ async def topics_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def topic_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user, _ = _resolve_user(update)
+    user_id = (user or {}).get("user_id")
     if not context.args:
         await update.message.reply_text(
             "⚠️ Please specify a topic or tag.\n\n"
@@ -803,7 +883,7 @@ async def topic_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     topic_name = " ".join(context.args).strip()
     clean_name = topic_name.lstrip("#")
-    brains = get_brain_objects_by_topic(topic_name, limit=10)
+    brains = get_brain_objects_by_topic(topic_name, limit=10, user_id=user_id)
 
     if not brains:
         await update.message.reply_text(
@@ -822,6 +902,8 @@ async def topic_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def creator_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user, _ = _resolve_user(update)
+    user_id = (user or {}).get("user_id")
     if not context.args:
         await update.message.reply_text(
             "⚠️ Please specify a creator username.\n\n"
@@ -832,7 +914,7 @@ async def creator_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     creator_name = " ".join(context.args).strip()
     clean_name = creator_name.lstrip("@")
-    brains = get_brain_objects_by_creator(creator_name, limit=10)
+    brains = get_brain_objects_by_creator(creator_name, limit=10, user_id=user_id)
 
     if not brains:
         await update.message.reply_text(

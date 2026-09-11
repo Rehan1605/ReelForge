@@ -55,6 +55,12 @@ def _ensure_indexes(col: Any) -> None:
             [("is_archived", 1), ("timestamps.processed_at", -1)],
             name="idx_archived_processed_at",
         )
+        col.create_index([("ownership.saved_by", 1)], name="idx_ownership_saved_by")
+        col.create_index([("ownership.created_by", 1)], name="idx_ownership_created_by")
+        col.create_index(
+            [("ownership.saved_by", 1), ("ownership.archived_by", 1), ("timestamps.processed_at", -1)],
+            name="idx_user_library_active",
+        )
         _indexes_initialized = True
     except Exception:
         # Non-fatal if index creation fails due to permissions or cluster state
@@ -88,6 +94,35 @@ def _get_brains_col() -> Any | None:
         return col
     except Exception:
         return None
+
+
+def _user_active_query(user_id: str) -> dict:
+    """
+    MongoDB query for a user's active V3 library.
+    V3 active state is per-user: saved_by contains user and archived_by does not.
+    """
+    return {
+        "ownership.saved_by": user_id,
+        "ownership.archived_by": {"$nin": [user_id]},
+    }
+
+
+def _increment_user_stats(
+    user_id: str | None,
+    reels_saved_delta: int = 0,
+    reels_processed_delta: int = 0,
+) -> None:
+    if not user_id or (reels_saved_delta == 0 and reels_processed_delta == 0):
+        return
+    try:
+        from storage.user import update_user_stats
+        update_user_stats(
+            user_id,
+            reels_saved_delta=reels_saved_delta,
+            reels_processed_delta=reels_processed_delta,
+        )
+    except Exception as e:
+        print(f"Notice: Could not update user stats: {e}")
 
 
 def _clean_doc(doc: dict | None) -> dict | None:
@@ -267,11 +302,12 @@ def _atomic_write_json(file_path: Path, data: dict) -> None:
 # Cache Lookup
 # ---------------------------------------------------------------------------
 
-def get_cached_brain_object(reel_id: str) -> dict | None:
+def get_cached_brain_object(reel_id: str, user_id: str | None = None) -> dict | None:
     """
     Retrieve an existing Brain Object by reel_id if it is fully valid and completed.
     Checks MongoDB Atlas primary first, then falls back to local JSON cache.
     Returns the loaded dict on cache hit, or None on cache miss / partial / malformed.
+    If user_id is provided, only returns active reels in that user's library.
     """
     if not reel_id or not isinstance(reel_id, str):
         return None
@@ -280,9 +316,15 @@ def get_cached_brain_object(reel_id: str) -> dict | None:
     try:
         col = _get_brains_col()
         if col is not None:
-            doc = col.find_one({"_id": reel_id, "is_archived": {"$ne": True}})
-            if doc is None:
-                doc = col.find_one({"id": reel_id, "is_archived": {"$ne": True}})
+            if user_id:
+                query = _user_active_query(user_id)
+                doc = col.find_one({"_id": reel_id, **query})
+                if doc is None:
+                    doc = col.find_one({"id": reel_id, **query})
+            else:
+                doc = col.find_one({"_id": reel_id, "is_archived": {"$ne": True}})
+                if doc is None:
+                    doc = col.find_one({"id": reel_id, "is_archived": {"$ne": True}})
             if doc:
                 clean = _clean_doc(doc)
                 if is_valid_brain_object(clean, expected_reel_id=reel_id):
@@ -299,6 +341,12 @@ def get_cached_brain_object(reel_id: str) -> dict | None:
         with open(brain_path, "r", encoding="utf-8") as f:
             data = json.load(f)
         if is_valid_brain_object(data, expected_reel_id=reel_id):
+            if user_id:
+                ownership = data.get("ownership") or {}
+                saved_by = ownership.get("saved_by") or []
+                archived_by = ownership.get("archived_by") or []
+                if user_id not in saved_by or user_id in archived_by:
+                    return None
             return data
     except Exception:
         return None
@@ -310,10 +358,15 @@ def get_cached_brain_object(reel_id: str) -> dict | None:
 # Object Construction & Provenance
 # ---------------------------------------------------------------------------
 
-def create_brain_object(source_url: str, metadata: dict | None = None) -> dict:
+def create_brain_object(
+    source_url: str,
+    metadata: dict | None = None,
+    user_id: str | None = None,
+) -> dict:
     """
     Initialize a new Brain Object structure from downloaded Reel metadata.
     Persists to MongoDB Atlas (primary) and creates a local JSON backup.
+    Supports user_id ownership tracking for ReelForge V3.
     """
     if metadata is None:
         metadata_file = _latest_file("*.info.json")
@@ -382,6 +435,11 @@ def create_brain_object(source_url: str, metadata: dict | None = None) -> dict:
             "modality": "caption_only",
             "has_audio_transcript": False,
             "has_vision_analysis": False
+        },
+        "ownership": {
+            "created_by": user_id,
+            "saved_by": [user_id] if user_id else [],
+            "archived_by": []
         }
     }
 
@@ -389,10 +447,34 @@ def create_brain_object(source_url: str, metadata: dict | None = None) -> dict:
     try:
         col = _get_brains_col()
         if col is not None:
+            existing_doc = col.find_one({"_id": reel_id}) or col.find_one({"id": reel_id})
+            saved_by_set = set()
+            archived_by_set = set()
+            created_by = user_id
+            was_saved_by_user = False
+            if existing_doc and isinstance(existing_doc.get("ownership"), dict):
+                existing_ownership = existing_doc["ownership"]
+                created_by = existing_ownership.get("created_by") or user_id
+                for s in existing_ownership.get("saved_by") or []:
+                    saved_by_set.add(s)
+                for a in existing_ownership.get("archived_by") or []:
+                    archived_by_set.add(a)
+                was_saved_by_user = bool(user_id and user_id in saved_by_set)
+            if user_id:
+                saved_by_set.add(user_id)
+                archived_by_set.discard(user_id)
+
+            reel["ownership"] = {
+                "created_by": created_by,
+                "saved_by": sorted(list(saved_by_set)) if saved_by_set else ([user_id] if user_id else []),
+                "archived_by": sorted(list(archived_by_set))
+            }
             mongo_doc = dict(reel)
             mongo_doc["_id"] = reel_id
             mongo_doc["is_archived"] = False
             col.replace_one({"_id": reel_id}, mongo_doc, upsert=True)
+            if user_id and not was_saved_by_user:
+                _increment_user_stats(user_id, reels_saved_delta=1)
     except Exception as e:
         print(f"Notice: Could not persist Brain Object to MongoDB: {e}")
 
@@ -406,6 +488,70 @@ def create_brain_object(source_url: str, metadata: dict | None = None) -> dict:
         print(f"Notice: Could not persist local JSON backup: {e}")
 
     return reel
+
+
+def associate_user_with_brain(reel_id: str, user_id: str) -> bool:
+    """
+    Atomically associate an existing Brain Object with a user's library on cache hit.
+    Adds user_id to ownership.saved_by and unarchives if previously archived.
+    """
+    if not reel_id or not user_id:
+        return False
+    col = _get_brains_col()
+    if col is None:
+        return True
+    try:
+        add_res = col.update_one(
+            {"_id": reel_id, "ownership.saved_by": {"$ne": user_id}},
+            {
+                "$addToSet": {"ownership.saved_by": user_id},
+                "$pull": {"ownership.archived_by": user_id},
+            }
+        )
+        if add_res.matched_count == 0:
+            add_res = col.update_one(
+                {"id": reel_id, "ownership.saved_by": {"$ne": user_id}},
+                {
+                    "$addToSet": {"ownership.saved_by": user_id},
+                    "$pull": {"ownership.archived_by": user_id},
+                }
+            )
+        if add_res.modified_count > 0:
+            _increment_user_stats(user_id, reels_saved_delta=1)
+        else:
+            col.update_one(
+                {"$or": [{"_id": reel_id}, {"id": reel_id}], "ownership.saved_by": user_id},
+                {"$pull": {"ownership.archived_by": user_id}},
+            )
+        return True
+    except Exception as e:
+        print(f"Notice: associate_user_with_brain failed: {e}")
+        return False
+
+
+def disassociate_user_from_brain(reel_id: str, user_id: str) -> bool:
+    """
+    Remove a user's association from a Brain Object (removes from saved_by and archived_by).
+    """
+    if not reel_id or not user_id:
+        return False
+    col = _get_brains_col()
+    if col is None:
+        return True
+    try:
+        col.update_one(
+            {"_id": reel_id},
+            {
+                "$pull": {
+                    "ownership.saved_by": user_id,
+                    "ownership.archived_by": user_id,
+                }
+            }
+        )
+        return True
+    except Exception as e:
+        print(f"Notice: disassociate_user_from_brain failed: {e}")
+        return False
 
 
 def compute_provenance(
@@ -715,11 +861,14 @@ def update_provenance(reel_id: str, provenance: dict) -> dict:
 # Loading & Scanning
 # ---------------------------------------------------------------------------
 
-def load_brain_object(reel_id: str) -> dict:
+def load_brain_object(reel_id: str, user_id: str | None = None) -> dict:
     """
     Load a specific Brain Object by its reel ID.
     Checks MongoDB Atlas first, then local brains/<reel_id>.json.
+    If user_id is provided, enforces that the user has saved this reel.
     """
+    brain: dict | None = None
+
     # 1. Check MongoDB Atlas
     try:
         col = _get_brains_col()
@@ -728,26 +877,38 @@ def load_brain_object(reel_id: str) -> dict:
             if doc is None:
                 doc = col.find_one({"id": reel_id})
             if doc:
-                return _clean_doc(doc)
+                brain = _clean_doc(doc)
     except Exception:
         pass
 
     # 2. Check Local File
-    brain_path = Path(BRAINS_DIR) / f"{reel_id}.json"
-    if brain_path.exists():
-        with open(brain_path, "r", encoding="utf-8") as f:
-            return json.load(f)
+    if brain is None:
+        brain_path = Path(BRAINS_DIR) / f"{reel_id}.json"
+        if brain_path.exists():
+            with open(brain_path, "r", encoding="utf-8") as f:
+                brain = json.load(f)
 
     # 3. Check Archived Local File
-    archive_path = Path(BRAINS_DIR) / "archive" / f"{reel_id}.json"
-    if archive_path.exists():
-        with open(archive_path, "r", encoding="utf-8") as f:
-            return json.load(f)
+    if brain is None:
+        archive_path = Path(BRAINS_DIR) / "archive" / f"{reel_id}.json"
+        if archive_path.exists():
+            with open(archive_path, "r", encoding="utf-8") as f:
+                brain = json.load(f)
 
-    raise FileNotFoundError(f"Brain Object not found: {reel_id}")
+    if brain is None:
+        raise FileNotFoundError(f"Brain Object not found: {reel_id}")
+
+    # If user_id provided, enforce storage-layer access control
+    if user_id is not None:
+        ownership = brain.get("ownership") or {}
+        saved_by = ownership.get("saved_by") or []
+        if user_id not in saved_by:
+            raise PermissionError(f"User '{user_id}' does not have access to reel '{reel_id}'.")
+
+    return brain
 
 
-def load_latest_brain_object() -> dict:
+def load_latest_brain_object(user_id: str | None = None) -> dict:
     """
     Load the most recently processed Brain Object.
     """
@@ -755,8 +916,13 @@ def load_latest_brain_object() -> dict:
     try:
         col = _get_brains_col()
         if col is not None:
+            if user_id:
+                query = _user_active_query(user_id)
+            else:
+                query = {"is_archived": {"$ne": True}}
+
             doc = col.find_one(
-                {"is_archived": {"$ne": True}},
+                query,
                 sort=[("timestamps.processed_at", -1)]
             )
             if doc:
@@ -764,33 +930,37 @@ def load_latest_brain_object() -> dict:
     except Exception:
         pass
 
-    # 2. Check Local Files
-    brains_dir = Path(BRAINS_DIR)
-    json_files = list(brains_dir.glob("*.json"))
-    if json_files:
-        latest_file = max(json_files, key=lambda f: f.stat().st_mtime)
-        return load_brain_object(latest_file.stem)
+    # 2. Check valid scans fallback
+    valid_brains = scan_valid_brain_objects(user_id=user_id)
+    if valid_brains:
+        return max(valid_brains, key=_brain_sort_key)
 
     raise FileNotFoundError("No Brain Objects found in storage.")
 
 
-def scan_valid_brain_objects() -> list[dict]:
+def scan_valid_brain_objects(user_id: str | None = None) -> list[dict]:
     """
     Scan and load all fully valid Brain Objects across the active library.
     Safely ignores malformed, partial, or corrupted records.
+    If user_id is provided, filters to active reels in the user's saved library.
     Prioritizes MongoDB Atlas; falls back to local JSON files if MongoDB has no active docs.
     """
     # 1. Query MongoDB Atlas
     try:
         col = _get_brains_col()
         if col is not None:
-            cursor = col.find({"is_archived": {"$ne": True}})
+            if user_id:
+                query = _user_active_query(user_id)
+            else:
+                query = {"is_archived": {"$ne": True}}
+
+            cursor = col.find(query)
             mongo_valid = []
             for doc in cursor:
                 clean = _clean_doc(doc)
                 if is_valid_brain_object(clean):
                     mongo_valid.append(clean)
-            if mongo_valid:
+            if mongo_valid or user_id:
                 return mongo_valid
     except Exception:
         pass
@@ -806,7 +976,14 @@ def scan_valid_brain_objects() -> list[dict]:
             with open(json_file, "r", encoding="utf-8") as f:
                 data = json.load(f)
             if is_valid_brain_object(data):
-                valid_brains.append(data)
+                if user_id:
+                    ownership = data.get("ownership") or {}
+                    saved_by = ownership.get("saved_by") or []
+                    archived_by = ownership.get("archived_by") or []
+                    if user_id in saved_by and user_id not in archived_by:
+                        valid_brains.append(data)
+                else:
+                    valid_brains.append(data)
         except Exception:
             continue
 
@@ -825,7 +1002,7 @@ def _brain_sort_key(brain: dict) -> str:
     return ""
 
 
-def get_recent_brain_objects(limit: int = 5) -> list[dict]:
+def get_recent_brain_objects(limit: int = 5, user_id: str | None = None) -> list[dict]:
     """
     Retrieve valid Brain Objects sorted by processed timestamp descending.
     Limit is clamped between 1 and 10 (default 5).
@@ -836,7 +1013,7 @@ def get_recent_brain_objects(limit: int = 5) -> list[dict]:
         limit_val = 5
     clamped_limit = max(1, min(limit_val, 10))
 
-    valid_brains = scan_valid_brain_objects()
+    valid_brains = scan_valid_brain_objects(user_id=user_id)
     valid_brains.sort(key=_brain_sort_key, reverse=True)
     return valid_brains[:clamped_limit]
 
@@ -896,7 +1073,12 @@ def _extract_searchable_text(brain: dict) -> str:
     return " ".join(parts)
 
 
-def search_brain_objects(query: str = "", category: str | None = None, limit: int = 5) -> list[dict]:
+def search_brain_objects(
+    query: str = "",
+    category: str | None = None,
+    limit: int = 5,
+    user_id: str | None = None,
+) -> list[dict]:
     """
     Perform deterministic, case-insensitive keyword search across valid Brain Objects.
     If category is supplied, filters by normalized category first.
@@ -908,7 +1090,7 @@ def search_brain_objects(query: str = "", category: str | None = None, limit: in
         limit_val = 5
     clamped_limit = max(1, min(limit_val, 10))
 
-    valid_brains = scan_valid_brain_objects()
+    valid_brains = scan_valid_brain_objects(user_id=user_id)
 
     # Category filter
     if category and isinstance(category, str) and category.strip():
@@ -933,12 +1115,12 @@ def search_brain_objects(query: str = "", category: str | None = None, limit: in
     return valid_brains[:clamped_limit]
 
 
-def get_brain_categories() -> dict[str, int]:
+def get_brain_categories(user_id: str | None = None) -> dict[str, int]:
     """
     Return a category-to-count mapping for all valid Brain Objects.
     Preserves config CATEGORIES ordering.
     """
-    valid_brains = scan_valid_brain_objects()
+    valid_brains = scan_valid_brain_objects(user_id=user_id)
     counts = {cat: 0 for cat in CATEGORIES}
 
     for brain in valid_brains:
@@ -951,12 +1133,12 @@ def get_brain_categories() -> dict[str, int]:
     return counts
 
 
-def get_knowledge_stats() -> dict:
+def get_knowledge_stats(user_id: str | None = None) -> dict:
     """
     Aggregate statistics across all valid Brain Objects in the knowledge base.
     """
-    valid_brains = scan_valid_brain_objects()
-    category_counts = get_brain_categories()
+    valid_brains = scan_valid_brain_objects(user_id=user_id)
+    category_counts = get_brain_categories(user_id=user_id)
 
     unique_tags = set()
     for brain in valid_brains:
@@ -1036,6 +1218,7 @@ def _extract_creator_normalized(brain: dict) -> str | None:
 def find_related_brain_objects(
     reel_id: str,
     limit: int = 5,
+    user_id: str | None = None,
 ) -> list[dict]:
     """
     Deterministically find active Brain Objects related to the specified reel_id.
@@ -1056,7 +1239,7 @@ def find_related_brain_objects(
     if not reel_id or not isinstance(reel_id, str):
         return []
 
-    active_brains = scan_valid_brain_objects()
+    active_brains = scan_valid_brain_objects(user_id=user_id)
     target_brain = None
     candidates = []
 
@@ -1067,7 +1250,9 @@ def find_related_brain_objects(
             candidates.append(b)
 
     if not target_brain:
-        return []
+        target_brain = get_cached_brain_object(reel_id, user_id=user_id)
+        if not target_brain:
+            return []
 
     target_tags = _extract_tags_set(target_brain)
     target_tools = _extract_tools_set(target_brain)
@@ -1130,11 +1315,11 @@ def find_related_brain_objects(
     return matches[:clamped_limit]
 
 
-def get_all_topics() -> list[tuple[str, int]]:
+def get_all_topics(user_id: str | None = None) -> list[tuple[str, int]]:
     """
     Return all unique tags/topics across active valid Brain Objects with reel counts.
     """
-    valid_brains = scan_valid_brain_objects()
+    valid_brains = scan_valid_brain_objects(user_id=user_id)
     counts: dict[str, int] = {}
 
     for brain in valid_brains:
@@ -1149,7 +1334,11 @@ def get_all_topics() -> list[tuple[str, int]]:
     return sorted_topics
 
 
-def get_brain_objects_by_topic(topic: str, limit: int = 10) -> list[dict]:
+def get_brain_objects_by_topic(
+    topic: str,
+    limit: int = 10,
+    user_id: str | None = None,
+) -> list[dict]:
     """
     Find all active Brain Objects tagged with or matching topic.
     """
@@ -1166,7 +1355,7 @@ def get_brain_objects_by_topic(topic: str, limit: int = 10) -> list[dict]:
     if not cleaned_topic:
         return []
 
-    valid_brains = scan_valid_brain_objects()
+    valid_brains = scan_valid_brain_objects(user_id=user_id)
     matched = []
 
     for brain in valid_brains:
@@ -1184,7 +1373,11 @@ def get_brain_objects_by_topic(topic: str, limit: int = 10) -> list[dict]:
     return matched[:clamped_limit]
 
 
-def get_brain_objects_by_creator(creator: str, limit: int = 10) -> list[dict]:
+def get_brain_objects_by_creator(
+    creator: str,
+    limit: int = 10,
+    user_id: str | None = None,
+) -> list[dict]:
     """
     Find all active Brain Objects by creator username or full_name.
     """
@@ -1201,7 +1394,7 @@ def get_brain_objects_by_creator(creator: str, limit: int = 10) -> list[dict]:
     if not cleaned_creator:
         return []
 
-    valid_brains = scan_valid_brain_objects()
+    valid_brains = scan_valid_brain_objects(user_id=user_id)
     matched = []
 
     for brain in valid_brains:
@@ -1225,19 +1418,75 @@ def get_brain_objects_by_creator(creator: str, limit: int = 10) -> list[dict]:
 # Lifecycle Management (Archive / Restore / Recategorize)
 # ---------------------------------------------------------------------------
 
-def archive_brain_object(reel_id: str) -> tuple[bool, str]:
+def archive_brain_object(reel_id: str, user_id: str | None = None) -> tuple[bool, str]:
     """
-    Archive a Brain Object (sets is_archived=True in MongoDB, moves to brains/archive/ locally).
-    Excludes it from discovery commands, stats, and cache lookups.
+    Archive a Brain Object.
+    If user_id is provided:
+      - Enforces that user_id has saved this reel.
+      - Atomically adds user_id to ownership.archived_by.
+      - Leaves other users' access unaffected.
+    If user_id is None:
+      - Performs legacy global archive (sets is_archived=True).
     """
     if not reel_id or not isinstance(reel_id, str):
         return False, "Invalid Reel ID provided."
 
+    col = _get_brains_col()
+
+    # Per-user archive
+    if user_id:
+        if col is not None:
+            try:
+                doc = col.find_one({"_id": reel_id}) or col.find_one({"id": reel_id})
+                if not doc:
+                    return False, f"Reel '{reel_id}' not found."
+
+                ownership = doc.get("ownership") or {}
+                saved_by = ownership.get("saved_by") or []
+                archived_by = ownership.get("archived_by") or []
+
+                if user_id not in saved_by:
+                    return False, f"Reel '{reel_id}' not found in your saved library."
+
+                if user_id in archived_by:
+                    return False, f"Archive collision: '{reel_id}' is already in your archive."
+
+                col.update_one(
+                    {"_id": doc.get("_id", reel_id)},
+                    {"$addToSet": {"ownership.archived_by": user_id}}
+                )
+                return True, f"Reel '{reel_id}' successfully archived."
+            except Exception as e:
+                return False, f"Archive failed: {e}"
+
+        # Fallback for local file mode with user_id
+        brain_path = Path(BRAINS_DIR) / f"{reel_id}.json"
+        if brain_path.is_file():
+            try:
+                with open(brain_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                ownership = data.get("ownership") or {}
+                saved_by = ownership.get("saved_by") or []
+                archived_by = ownership.get("archived_by") or []
+                if user_id not in saved_by:
+                    return False, f"Reel '{reel_id}' not found in your saved library."
+                if user_id in archived_by:
+                    return False, f"Archive collision: '{reel_id}' is already in your archive."
+                if "ownership" not in data:
+                    data["ownership"] = {}
+                if "archived_by" not in data["ownership"]:
+                    data["ownership"]["archived_by"] = []
+                data["ownership"]["archived_by"].append(user_id)
+                _atomic_write_json(brain_path, data)
+                return True, f"Reel '{reel_id}' successfully archived."
+            except Exception as e:
+                return False, f"Failed to archive Reel '{reel_id}': {e}"
+        return False, f"Reel '{reel_id}' not found in active library."
+
+    # Legacy global archive (user_id is None)
     archived_in_mongo = False
 
-    # 1. Archive in MongoDB Atlas
     try:
-        col = _get_brains_col()
         if col is not None:
             doc = col.find_one({"_id": reel_id}) or col.find_one({"id": reel_id})
             if doc:
@@ -1251,7 +1500,6 @@ def archive_brain_object(reel_id: str) -> tuple[bool, str]:
     except Exception as e:
         print(f"Notice: MongoDB archive operation failed: {e}")
 
-    # 2. Archive Local File Backup
     active_path = Path(BRAINS_DIR) / f"{reel_id}.json"
     archive_dir = Path(BRAINS_DIR) / "archive"
     archive_path = archive_dir / f"{reel_id}.json"
@@ -1274,18 +1522,71 @@ def archive_brain_object(reel_id: str) -> tuple[bool, str]:
     return False, f"Reel '{reel_id}' not found in active library."
 
 
-def restore_brain_object(reel_id: str) -> tuple[bool, str]:
+def restore_brain_object(reel_id: str, user_id: str | None = None) -> tuple[bool, str]:
     """
-    Restore an archived Brain Object (sets is_archived=False in MongoDB, moves back to brains/ locally).
+    Restore an archived Brain Object.
+    If user_id is provided:
+      - Enforces that user_id has saved this reel.
+      - Atomically pulls user_id from ownership.archived_by.
+    If user_id is None:
+      - Performs legacy global restore (sets is_archived=False).
     """
     if not reel_id or not isinstance(reel_id, str):
         return False, "Invalid Reel ID provided."
 
+    col = _get_brains_col()
+
+    # Per-user restore
+    if user_id:
+        if col is not None:
+            try:
+                doc = col.find_one({"_id": reel_id}) or col.find_one({"id": reel_id})
+                if not doc:
+                    return False, f"Reel '{reel_id}' not found."
+
+                ownership = doc.get("ownership") or {}
+                saved_by = ownership.get("saved_by") or []
+                archived_by = ownership.get("archived_by") or []
+
+                if user_id not in saved_by:
+                    return False, f"Reel '{reel_id}' not found in your library."
+
+                if user_id not in archived_by:
+                    return False, f"Restore collision: Reel '{reel_id}' is already active in your library."
+
+                col.update_one(
+                    {"_id": doc.get("_id", reel_id)},
+                    {"$pull": {"ownership.archived_by": user_id}}
+                )
+                return True, f"Reel '{reel_id}' successfully restored to active library."
+            except Exception as e:
+                return False, f"Restore failed: {e}"
+
+        # Fallback for local file mode with user_id
+        brain_path = Path(BRAINS_DIR) / f"{reel_id}.json"
+        if brain_path.is_file():
+            try:
+                with open(brain_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                ownership = data.get("ownership") or {}
+                saved_by = ownership.get("saved_by") or []
+                archived_by = ownership.get("archived_by") or []
+                if user_id not in saved_by:
+                    return False, f"Reel '{reel_id}' not found in your library."
+                if user_id not in archived_by:
+                    return False, f"Restore collision: Reel '{reel_id}' is already active in your library."
+                if "ownership" in data and "archived_by" in data["ownership"]:
+                    data["ownership"]["archived_by"] = [u for u in data["ownership"]["archived_by"] if u != user_id]
+                _atomic_write_json(brain_path, data)
+                return True, f"Reel '{reel_id}' successfully restored to active library."
+            except Exception as e:
+                return False, f"Failed to restore Reel '{reel_id}': {e}"
+        return False, f"Archived Reel '{reel_id}' not found in archive."
+
+    # Legacy global restore (user_id is None)
     restored_in_mongo = False
 
-    # 1. Restore in MongoDB Atlas
     try:
-        col = _get_brains_col()
         if col is not None:
             doc = col.find_one({"_id": reel_id}) or col.find_one({"id": reel_id})
             if doc:
@@ -1299,7 +1600,6 @@ def restore_brain_object(reel_id: str) -> tuple[bool, str]:
     except Exception as e:
         print(f"Notice: MongoDB restore operation failed: {e}")
 
-    # 2. Restore Local File Backup
     active_path = Path(BRAINS_DIR) / f"{reel_id}.json"
     archive_path = Path(BRAINS_DIR) / "archive" / f"{reel_id}.json"
 
@@ -1321,10 +1621,15 @@ def restore_brain_object(reel_id: str) -> tuple[bool, str]:
     return False, f"Archived Reel '{reel_id}' not found in archive."
 
 
-def recategorize_brain_object(reel_id: str, new_category: str) -> tuple[bool, str, dict | None]:
+def recategorize_brain_object(
+    reel_id: str,
+    new_category: str,
+    user_id: str | None = None,
+) -> tuple[bool, str, dict | None]:
     """
     Manually update category and normalize knowledge schema without invoking an LLM.
     Preserves summary, title, tags, and all valid existing knowledge fields.
+    If user_id is provided, enforces that the user has saved this reel.
     """
     if not reel_id or not isinstance(reel_id, str):
         return False, "Invalid Reel ID provided.", None
@@ -1343,7 +1648,9 @@ def recategorize_brain_object(reel_id: str, new_category: str) -> tuple[bool, st
         return False, f"Unknown category '{new_category}'. Valid categories are:\n{valid_list}", None
 
     try:
-        brain = load_brain_object(reel_id)
+        brain = load_brain_object(reel_id, user_id=user_id)
+    except PermissionError:
+        return False, f"Access denied: Reel '{reel_id}' is not in your saved library.", None
     except Exception as e:
         return False, f"Reel '{reel_id}' not found in active library: {e}", None
 

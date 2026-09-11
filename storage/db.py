@@ -105,6 +105,59 @@ def get_collection(collection_name: str = "brains", db_name: str | None = None) 
     return db[collection_name]
 
 
+def ensure_user_indexes(col: Collection | None = None) -> None:
+    """
+    Ensure required performance and uniqueness indexes exist on the MongoDB users collection.
+    Executes safely and idempotently.
+    """
+    if col is None:
+        try:
+            col = get_collection("users")
+        except Exception:
+            return
+
+    try:
+        col.create_index([("telegram.id", 1)], unique=True, sparse=True, name="idx_telegram_id_unique")
+        col.create_index([("user_id", 1)], unique=True, name="idx_user_id_unique")
+        col.create_index([("status", 1)], name="idx_status")
+        col.create_index([("timestamps.created_at", -1)], name="idx_user_created_at")
+    except Exception:
+        # Non-fatal if index creation fails due to permissions or cluster state
+        pass
+
+
+def ensure_brain_indexes(col: Collection | None = None) -> None:
+    """
+    Ensure required performance, ownership, and query indexes exist on the MongoDB brains collection.
+    Executes safely and idempotently.
+    """
+    if col is None:
+        try:
+            col = get_collection("brains")
+        except Exception:
+            return
+
+    try:
+        col.create_index([("id", 1)], name="idx_reel_id")
+        col.create_index([("is_archived", 1)], name="idx_is_archived")
+        col.create_index([("timestamps.processed_at", -1)], name="idx_processed_at")
+        col.create_index([("knowledge.category", 1)], name="idx_category")
+        col.create_index([("creator.username", 1)], name="idx_creator_username")
+        col.create_index([("knowledge.tags", 1)], name="idx_tags")
+        col.create_index(
+            [("is_archived", 1), ("timestamps.processed_at", -1)],
+            name="idx_archived_processed_at",
+        )
+        col.create_index([("ownership.saved_by", 1)], name="idx_ownership_saved_by")
+        col.create_index([("ownership.created_by", 1)], name="idx_ownership_created_by")
+        col.create_index(
+            [("ownership.saved_by", 1), ("ownership.archived_by", 1), ("timestamps.processed_at", -1)],
+            name="idx_user_library_active",
+        )
+    except Exception:
+        pass
+
+
 def close_mongo_client() -> None:
     """
     Cleanly close the MongoDB client connection pool.

@@ -54,7 +54,18 @@ def _load_latest_brain_object():
     return load_latest_brain_object()
 
 
-def process_reel(url, progress_callback=None, force=False):
+def process_reel(url, progress_callback=None, force=False, user_id: str | None = None):
+    """
+    Process an Instagram Reel URL through the full ReelForge pipeline.
+
+    Args:
+        url:               Instagram Reel URL to process.
+        progress_callback: Optional callable(str) for progress messages.
+        force:             If True, bypass extraction cache and re-run full pipeline.
+        user_id:           Canonical ReelForge user_id (e.g. 'usr_...') to associate
+                           ownership with this reel. If None, no ownership is stamped
+                           (CLI/admin/evaluation mode).
+    """
     # 1. Check for valid existing Brain Object cache before downloading (only when force=False)
     if not force:
         candidate_id = extract_reel_id_from_url(url)
@@ -63,6 +74,15 @@ def process_reel(url, progress_callback=None, force=False):
             if cached_brain is not None:
                 print(f"[OK] Reel '{candidate_id}' is already processed. Returning cached Brain Object.")
                 _notify(progress_callback, "Already Processed (Using Cached Knowledge)")
+
+                # Associate this user with the cached Brain Object (cache hit ownership)
+                if user_id:
+                    try:
+                        from storage.brain_object import associate_user_with_brain
+                        associate_user_with_brain(candidate_id, user_id)
+                    except Exception as ae:
+                        print(f"Notice: Could not associate user with cached brain: {ae}")
+
                 category = cached_brain.get("knowledge", {}).get("category")
                 knowledge = cached_brain.get("knowledge")
                 transcript = cached_brain.get("content", {}).get("transcript")
@@ -85,7 +105,10 @@ def process_reel(url, progress_callback=None, force=False):
     reel_id = None
     try:
         _notify(progress_callback, "Downloading")
-        brain = acquire_reel(url)
+        if user_id:
+            brain = acquire_reel(url, user_id=user_id)
+        else:
+            brain = acquire_reel(url)
         reel_id = brain.get("id")
         video_path = Path(brain.get("media", {}).get("video_path", ""))
         caption = brain.get("content", {}).get("caption", "") or ""
@@ -220,6 +243,13 @@ def process_reel(url, progress_callback=None, force=False):
             print("[OK] Pipeline completed successfully (OneNote published).")
         else:
             print(f"[WARN] Pipeline completed extraction, but OneNote failed: {onenote_error}")
+
+        if user_id:
+            try:
+                from storage.user import update_user_stats
+                update_user_stats(user_id, reels_processed_delta=1)
+            except Exception as se:
+                print(f"Notice: Could not update processed stats: {se}")
 
         return {
             "success": True,
