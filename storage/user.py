@@ -43,6 +43,34 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
+def new_microsoft_structure() -> dict[str, Any]:
+    """
+    Return a fresh default Microsoft/OneNote connection structure.
+
+    Every user gets an independent connection record. Credentials live ONLY
+    in the 'users' collection under 'microsoft'; they are never copied into
+    Brain Objects.
+    """
+    return {
+        "connected": False,
+        "microsoft_user_id": None,
+        "display_name": None,
+        "email": None,
+        "tenant_id": None,
+        "token_cache": None,
+        "token_refreshed_at": None,
+        "connected_at": None,
+        "notebook_name": "InstaBrain",
+        "notebook_id": None,
+        "sections": {},
+    }
+
+
+MICROSOFT_DEFAULT: dict[str, Any] = new_microsoft_structure()
+
+_MICROSOFT_ALLOWED_FIELDS = set(MICROSOFT_DEFAULT.keys())
+
+
 def _get_users_col() -> Any | None:
     """
     Retrieve the MongoDB 'users' collection instance, or None if unavailable.
@@ -187,6 +215,7 @@ def create_user_from_telegram(telegram_user: Any, role: str = "user") -> dict:
             "updated_at": now,
             "last_seen_at": now,
         },
+        "microsoft": new_microsoft_structure(),
     }
 
     col = _get_users_col()
@@ -319,3 +348,124 @@ def update_user_stats(
     except Exception as e:
         print(f"Notice: update_user_stats failed: {e}")
         return None
+
+
+def _to_microsoft_update(microsoft_data: dict[str, Any]) -> dict[str, Any]:
+    """
+    Validate Microsoft connection data and convert it into dot-pathed $set fields.
+
+    Ensures only known 'microsoft.*' keys are written, so callers cannot
+    inject arbitrary fields into the user document.
+    """
+    if not isinstance(microsoft_data, dict) or not microsoft_data:
+        raise ValueError("microsoft_data must be a non-empty dict")
+
+    unknown = set(microsoft_data.keys()) - _MICROSOFT_ALLOWED_FIELDS
+    if unknown:
+        raise ValueError(f"Unknown Microsoft connection field(s): {sorted(unknown)}")
+
+    return {f"microsoft.{key}": value for key, value in microsoft_data.items()}
+
+
+def get_user_microsoft(user_id: str) -> dict[str, Any] | None:
+    """
+    Return the Microsoft/OneNote connection record for a user, or None if the
+    user does not exist.
+
+    Existing users created before V3.3 have no 'microsoft' field; they are
+    seamlessly returned with default values (backward compatible).
+    Never logs token_cache or other credential material.
+    """
+    if not user_id or not isinstance(user_id, str):
+        return None
+
+    col = _get_users_col()
+    if col is None:
+        return None
+
+    try:
+        doc = col.find_one({"_id": user_id})
+        if doc is None:
+            doc = col.find_one({"user_id": user_id})
+    except Exception as e:
+        print(f"Notice: get_user_microsoft lookup failed: {e}")
+        return None
+
+    if not doc:
+        return None
+
+    existing = doc.get("microsoft")
+    merged = new_microsoft_structure()
+    if isinstance(existing, dict):
+        merged.update(existing)
+    return merged
+
+
+def update_user_microsoft(user_id: str, microsoft_data: dict[str, Any]) -> dict[str, Any] | None:
+    """
+    Atomically store Microsoft/OneNote connection metadata for a user.
+
+    - Updates only the 'microsoft' subdocument (and 'timestamps.updated_at').
+    - Returns the updated Microsoft structure, or None if the user does not exist.
+    - Raises DuplicateKeyError if the Microsoft account is already connected to
+      another ReelForge user (enforced by the unique partial index).
+    - Never logs token_cache contents.
+    """
+    if not user_id or not isinstance(user_id, str):
+        return None
+
+    col = _get_users_col()
+    if col is None:
+        return None
+
+    set_fields = _to_microsoft_update(microsoft_data)
+    set_fields["timestamps.updated_at"] = _now_iso()
+
+    try:
+        result = col.update_one({"_id": user_id}, {"$set": set_fields})
+        if result.matched_count == 0:
+            result = col.update_one({"user_id": user_id}, {"$set": set_fields})
+        if result.matched_count == 0:
+            return None
+    except DuplicateKeyError:
+        raise
+    except Exception as e:
+        print(f"Notice: update_user_microsoft failed: {e}")
+        return None
+
+    return get_user_microsoft(user_id)
+
+
+def disconnect_user_microsoft(user_id: str) -> dict[str, Any] | None:
+    """
+    Atomically clear a user's Microsoft/OneNote connection state and credentials.
+
+    Existing OneNote pages are never touched. The user reconnects later via
+    the V3.3 OAuth flow. Returns the (reset) Microsoft structure, or None if
+    the user does not exist.
+    """
+    if not user_id or not isinstance(user_id, str):
+        return None
+
+    col = _get_users_col()
+    if col is None:
+        return None
+
+    reset = new_microsoft_structure()
+    try:
+        result = col.update_one(
+            {"_id": user_id},
+            {"$set": {"microsoft": reset, "timestamps.updated_at": _now_iso()}},
+        )
+        if result.matched_count == 0:
+            result = col.update_one(
+                {"user_id": user_id},
+                {"$set": {"microsoft": reset, "timestamps.updated_at": _now_iso()}},
+            )
+        if result.matched_count == 0:
+            return None
+    except Exception as e:
+        print(f"Notice: disconnect_user_microsoft failed: {e}")
+        return None
+
+    return get_user_microsoft(user_id)

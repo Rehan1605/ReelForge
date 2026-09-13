@@ -6,9 +6,10 @@ ROOT_DIR = Path(__file__).resolve().parent.parent
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
-from telegram import Update
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import (
     ApplicationBuilder,
+    CallbackQueryHandler,
     CommandHandler,
     MessageHandler,
     ContextTypes,
@@ -16,6 +17,7 @@ from telegram.ext import (
 )
 
 from config import BOT_TOKEN, BRAINS_DIR, CATEGORIES
+from auth.oauth_server import start_oauth_for_user
 from onenote.sanitizer import sanitize_page_title
 from processing.pipeline import process_reel
 from storage.brain_object import (
@@ -35,6 +37,81 @@ from storage.brain_object import (
     scan_valid_brain_objects,
     search_brain_objects,
 )
+from storage.user import disconnect_user_microsoft, get_user_microsoft
+
+# Callback action identifiers (never carry a user_id; the user is always
+# derived from the authenticated Telegram update).
+DISCONNECT_START = "disconnect:start"
+DISCONNECT_CONFIRM = "disconnect:confirm"
+DISCONNECT_CANCEL = "disconnect:cancel"
+STATUS_SHOW = "status:show"
+
+
+def _onenote_issue_message(onenote_error) -> str:
+    """Turn a known OneNote publishing failure into a short, safe, actionable
+    message. Never echoes technical detail or credential material."""
+    if not onenote_error:
+        return "OneNote publishing failed."
+    text = str(onenote_error)
+    lowered = text.lower()
+
+    if "not connected" in lowered and "/connect" in lowered:
+        return (
+            "Your Microsoft connection is not set up.\n\n"
+            "Use /connect to connect your Microsoft account."
+        )
+
+    if (
+        "reconnect via /connect" in lowered
+        or "authentication failed" in lowered
+        or "needs to be refreshed" in lowered
+        or "invalid_grant" in lowered
+    ):
+        return (
+            "Your Microsoft connection needs to be refreshed.\n\n"
+            "Please use /connect to reconnect your account."
+        )
+
+    if any(
+        marker in lowered
+        for marker in (
+            "token",
+            "refresh_token",
+            "access_token",
+            "token_cache",
+            "pkce",
+            "verifier",
+            "bearer",
+            "authorization code",
+            "secret",
+            "state=",
+            "grant",
+        )
+    ):
+        return (
+            "OneNote publishing failed.\n\n"
+            "Please check your Microsoft connection, or reconnect via /connect."
+        )
+
+    return text
+
+
+def _microsoft_status_text(user_id) -> str:
+    """Build a safe Microsoft connection status message for a resolved user."""
+    ms = get_user_microsoft(user_id)
+    if ms is None or not ms.get("connected"):
+        return (
+            "Microsoft account: Not connected\n\n"
+            "Use /connect to connect your Microsoft account."
+        )
+
+    account = ms.get("display_name") or ms.get("email") or "Microsoft account"
+    notebook = ms.get("notebook_name") or "InstaBrain"
+    return (
+        "Microsoft account: Connected\n"
+        f"Account: {account}\n"
+        f"OneNote notebook: {notebook}"
+    )
 
 
 def _list_items(items):
@@ -294,7 +371,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "• /force <url> — Ingest with cache bypass\n"
         "• /recat <id> <cat> — Change category\n"
         "• /archive <id> — Move to archive\n"
-        "• /restore <id> — Restore from archive\n"
+        "• /restore <id> — Restore from archive\n\n"
+        "🔗 Microsoft OneNote:\n"
+        "• /connect — Connect your Microsoft account\n"
+        "• /mestatus — Check your OneNote connection\n"
+        "• /disconnect — Disconnect Microsoft\n"
         "• /help — Full command guide"
     )
     await update.message.reply_text(welcome_text)
@@ -321,7 +402,15 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "• /restore <reel_id> — Restore an archived Reel to active library\n"
         "• /help — Show this guide\n\n"
         "📥 Add New Reels:\n"
-        "Paste any Instagram Reel link directly into this chat to process and save it to OneNote."
+        "Paste any Instagram Reel link directly into this chat to process and save it to OneNote.\n\n"
+        "🔗 Microsoft OneNote:\n"
+        "To save reels to your OneNote:\n"
+        "1. Connect Microsoft with /connect\n"
+        "2. Send me a reel\n"
+        "3. I'll process and organize it.\n\n"
+        "• /connect — Connect your Microsoft account\n"
+        "• /mestatus — Check connection status\n"
+        "• /disconnect — Disconnect Microsoft account\n"
     )
     await update.message.reply_text(help_text)
 
@@ -469,6 +558,156 @@ async def get_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
 
 
+async def connect_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user, _ = _resolve_user(update)
+    if user is None:
+        await update.message.reply_text(
+            "⚠️ Could not resolve your account. Please try /start first."
+        )
+        return
+
+    user_id = user.get("user_id")
+
+    ms = get_user_microsoft(user_id)
+    if ms is not None and ms.get("connected"):
+        await update.message.reply_text(
+            "Your Microsoft account is already connected.",
+            reply_markup=InlineKeyboardMarkup(
+                [
+                    [
+                        InlineKeyboardButton("Connection Status", callback_data=STATUS_SHOW),
+                        InlineKeyboardButton("Disconnect", callback_data=DISCONNECT_START),
+                    ]
+                ]
+            ),
+        )
+        return
+
+    try:
+        auth_url = start_oauth_for_user(user_id)
+    except Exception as e:
+        print(f"Notice: OAuth start failed for {user_id}: {type(e).__name__}")
+        await update.message.reply_text(
+            "⚠️ Microsoft connection is not available right now. "
+            "Please try again later."
+        )
+        return
+
+    await update.message.reply_text(
+        "Connect your Microsoft account to enable OneNote saving.\n\n"
+        "Tap the button below to authorize ReelForge access.",
+        reply_markup=InlineKeyboardMarkup(
+            [[InlineKeyboardButton("Connect Microsoft", url=auth_url)]]
+        ),
+    )
+
+
+async def mestatus_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user, _ = _resolve_user(update)
+    if user is None:
+        await update.message.reply_text(
+            "⚠️ Could not resolve your account. Please try /start first."
+        )
+        return
+
+    await update.message.reply_text(_microsoft_status_text(user.get("user_id")))
+
+
+async def disconnect_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user, _ = _resolve_user(update)
+    if user is None:
+        await update.message.reply_text(
+            "⚠️ Could not resolve your account. Please try /start first."
+        )
+        return
+
+    user_id = user.get("user_id")
+    ms = get_user_microsoft(user_id)
+    if ms is None or not ms.get("connected"):
+        await update.message.reply_text(
+            "Microsoft account is not connected.\n\n"
+            "Use /connect to connect your Microsoft account."
+        )
+        return
+
+    await update.message.reply_text(
+        "Disconnect your Microsoft account?\n\n"
+        "This will stop ReelForge from saving reels to your OneNote account.",
+        reply_markup=InlineKeyboardMarkup(
+            [
+                [
+                    InlineKeyboardButton("Disconnect", callback_data=DISCONNECT_CONFIRM),
+                    InlineKeyboardButton("Cancel", callback_data=DISCONNECT_CANCEL),
+                ]
+            ]
+        ),
+    )
+
+
+async def connection_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle Microsoft connection inline buttons.
+
+    The acting user is always derived from the authenticated Telegram update;
+    callback_data never carries (and never trusts) a user_id.
+    """
+    query = getattr(update, "callback_query", None)
+    if query is None:
+        return
+
+    await query.answer()
+
+    user, _ = _resolve_user(update)
+    if user is None:
+        await query.edit_message_text(
+            "⚠️ Could not resolve your account. Please try /start first."
+        )
+        return
+
+    user_id = user.get("user_id")
+    data = getattr(query, "data", "") or ""
+
+    if data == STATUS_SHOW:
+        await query.edit_message_text(_microsoft_status_text(user_id))
+        return
+
+    if data == DISCONNECT_START:
+        await query.edit_message_text(
+            "Disconnect your Microsoft account?\n\n"
+            "This will stop ReelForge from saving reels to your OneNote account.",
+            reply_markup=InlineKeyboardMarkup(
+                [
+                    [
+                        InlineKeyboardButton("Disconnect", callback_data=DISCONNECT_CONFIRM),
+                        InlineKeyboardButton("Cancel", callback_data=DISCONNECT_CANCEL),
+                    ]
+                ]
+            ),
+        )
+        return
+
+    if data == DISCONNECT_CONFIRM:
+        ms = get_user_microsoft(user_id)
+        if ms is None or not ms.get("connected"):
+            await query.edit_message_text(
+                "Your Microsoft account is not connected.\n\n"
+                "Use /connect to connect your Microsoft account."
+            )
+            return
+
+        disconnect_user_microsoft(user_id)
+        await query.edit_message_text(
+            "Microsoft account disconnected.\n\n"
+            "Use /connect whenever you want to reconnect."
+        )
+        return
+
+    if data == DISCONNECT_CANCEL:
+        await query.edit_message_text(
+            "Cancelled. Your Microsoft connection remains untouched."
+        )
+        return
+
+
 async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user, _ = _resolve_user(update)
     user_id = (user or {}).get("user_id")
@@ -549,7 +788,7 @@ async def receive(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif onenote_success:
         status_line = f"✅ OneNote Page Created in Section: {category}\n\n"
     else:
-        status_line = f"⚠️ Saved to Brain Object, but OneNote publishing failed: {onenote_error}\n\n"
+        status_line = f"⚠️ Saved to Brain Object, but OneNote publishing failed: {_onenote_issue_message(onenote_error)}\n\n"
 
     summary_text = status_line + _format_summary(result)
     await update.message.reply_text(summary_text)
@@ -612,7 +851,7 @@ async def force_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if onenote_success:
         status_line = f"⚡ Force-Processed (Fresh Extraction)\n✅ OneNote Page Created in Section: {category}\n\n"
     else:
-        status_line = f"⚡ Force-Processed (Fresh Extraction)\n⚠️ Saved to Brain Object, but OneNote publishing failed: {onenote_error}\n\n"
+        status_line = f"⚡ Force-Processed (Fresh Extraction)\n⚠️ Saved to Brain Object, but OneNote publishing failed: {_onenote_issue_message(onenote_error)}\n\n"
 
     summary_text = status_line + _format_summary(result)
     await update.message.reply_text(summary_text)
@@ -699,7 +938,7 @@ async def reprocess_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if onenote_success:
         status_line = f"🔄 Successfully Reprocessed `{reel_id}`\n✅ OneNote Page Created in Section: {category}\n\n"
     else:
-        status_line = f"🔄 Successfully Reprocessed `{reel_id}`\n⚠️ Saved to Brain Object, but OneNote publishing failed: {onenote_error}\n\n"
+        status_line = f"🔄 Successfully Reprocessed `{reel_id}`\n⚠️ Saved to Brain Object, but OneNote publishing failed: {_onenote_issue_message(onenote_error)}\n\n"
 
     summary_text = status_line + _format_summary(result)
     await update.message.reply_text(summary_text)
@@ -952,6 +1191,12 @@ def run_bot():
     app.add_handler(CommandHandler("archive", archive_command))
     app.add_handler(CommandHandler("restore", restore_command))
     app.add_handler(CommandHandler("recat", recat_command))
+    app.add_handler(CommandHandler("connect", connect_command))
+    app.add_handler(CommandHandler("mestatus", mestatus_command))
+    app.add_handler(CommandHandler("disconnect", disconnect_command))
+    app.add_handler(
+        CallbackQueryHandler(connection_callback, pattern=r"^(disconnect:|status:)")
+    )
 
     # Register URL ingestion handler (for non-command text)
     app.add_handler(

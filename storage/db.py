@@ -31,6 +31,11 @@ SERVER_SELECTION_TIMEOUT_MS = 5000
 CONNECT_TIMEOUT_MS = 5000
 SOCKET_TIMEOUT_MS = 10000
 
+# Legacy MongoDB-invalid compound multikey index(es) to remove on startup.
+# MongoDB forbids a single compound index spanning more than one array field
+# ("cannot index parallel arrays", code 171).
+LEGACY_INVALID_BRAIN_INDEXES = ("idx_user_library_active",)
+
 
 def mask_mongo_uri(uri: str) -> str:
     """
@@ -121,9 +126,93 @@ def ensure_user_indexes(col: Collection | None = None) -> None:
         col.create_index([("user_id", 1)], unique=True, name="idx_user_id_unique")
         col.create_index([("status", 1)], name="idx_status")
         col.create_index([("timestamps.created_at", -1)], name="idx_user_created_at")
+
+        # V3.3 Microsoft connection indexes.
+        # Partial index: only documents whose microsoft.microsoft_user_id is a
+        # real string are indexed. New users store null and legacy users have no
+        # 'microsoft' field at all, so neither is indexed. This enforces that the
+        # SAME Microsoft account can never be linked to two ReelForge users.
+        col.create_index(
+            [("microsoft.microsoft_user_id", 1)],
+            name="idx_microsoft_account_unique",
+            unique=True,
+            partialFilterExpression={"microsoft.microsoft_user_id": {"$type": "string"}},
+        )
+        # Auxiliary filter for future admin scans of connected users.
+        col.create_index([("microsoft.connected", 1)], name="idx_microsoft_connected")
     except Exception:
         # Non-fatal if index creation fails due to permissions or cluster state
         pass
+
+
+def ensure_oauth_session_indexes(col: Collection | None = None) -> None:
+    """
+    Ensure required indexes exist on the MongoDB oauth_sessions collection.
+
+    - TTL index on expires_at (auto-deletes expired sessions).
+    - user_id index for user-scoped lookups.
+    - Unique state_hash index so a signed OAuth state can only be used once.
+    Executes safely and idempotently.
+    """
+    if col is None:
+        try:
+            col = get_collection("oauth_sessions")
+        except Exception:
+            return
+
+    try:
+        col.create_index([("expires_at", 1)], name="idx_oauth_expires_at", expireAfterSeconds=0)
+        col.create_index([("user_id", 1)], name="idx_oauth_session_user_id")
+        col.create_index([("state_hash", 1)], name="idx_oauth_state_hash_unique", unique=True)
+    except Exception:
+        pass
+
+
+def _drop_legacy_invalid_indexes(col: Collection) -> None:
+    """
+    Drop any legacy MongoDB-invalid compound multikey indexes.
+
+    MongoDB forbids a compound index that contains more than one array field
+    ("cannot index parallel arrays", code 171). The old V3.2 active-library
+    index combined ownership.saved_by (array) + ownership.archived_by (array).
+    It is dropped so inserts of documents holding both arrays succeed again.
+    """
+    try:
+        current = col.index_information()
+        for name in (LEGACY_INVALID_BRAIN_INDEXES):
+            if name in current:
+                col.drop_index(name)
+                print(f"Migrated: dropped invalid index '{name}'")
+    except Exception as e:
+        print(f"Notice: could not evaluate legacy index migration: {e}")
+
+
+def migrate_brain_indexes(col: Collection | None = None) -> dict[str, dict]:
+    """
+    Explicitly migrate the brains collection to the MongoDB-safe index strategy.
+
+    Steps:
+      1. Drop only the legacy invalid 'idx_user_library_active' compound index.
+      2. Recreate/retain the full safe index set (see ensure_brain_indexes).
+      3. Return the resulting index_information() map (never raises; reports
+         the actual Atlas state on failure).
+
+    No Brain Object documents are touched.
+    """
+    if col is None:
+        try:
+            col = get_collection("brains")
+        except Exception as e:
+            print(f"Notice: migrate_brain_indexes could not reach brains collection: {e}")
+            return {}
+
+    _drop_legacy_invalid_indexes(col)
+    ensure_brain_indexes(col)
+    try:
+        return col.index_information()
+    except Exception as e:
+        print(f"Notice: migrate_brain_indexes could not read index list: {e}")
+        return {}
 
 
 def ensure_brain_indexes(col: Collection | None = None) -> None:
@@ -136,6 +225,9 @@ def ensure_brain_indexes(col: Collection | None = None) -> None:
             col = get_collection("brains")
         except Exception:
             return
+
+    # Self-heal: remove the legacy invalid compound multikey index if present.
+    _drop_legacy_invalid_indexes(col)
 
     try:
         col.create_index([("id", 1)], name="idx_reel_id")
@@ -150,9 +242,15 @@ def ensure_brain_indexes(col: Collection | None = None) -> None:
         )
         col.create_index([("ownership.saved_by", 1)], name="idx_ownership_saved_by")
         col.create_index([("ownership.created_by", 1)], name="idx_ownership_created_by")
+        # MongoDB-safe active-library indexes. A compound index may contain at
+        # most ONE array field, so saved_by and archived_by are never combined.
+        # - single archived_by index for archive/restore scans and $nin filtering
+        # - (saved_by, processed_at) compound covers the active-library query
+        #   (saved_by = user_id) sorted by processed_at desc.
+        col.create_index([("ownership.archived_by", 1)], name="idx_ownership_archived_by")
         col.create_index(
-            [("ownership.saved_by", 1), ("ownership.archived_by", 1), ("timestamps.processed_at", -1)],
-            name="idx_user_library_active",
+            [("ownership.saved_by", 1), ("timestamps.processed_at", -1)],
+            name="idx_ownership_saved_processed_at",
         )
     except Exception:
         pass

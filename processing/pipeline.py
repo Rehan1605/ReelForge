@@ -228,7 +228,7 @@ def process_reel(url, progress_callback=None, force=False, user_id: str | None =
 
                 _notify(progress_callback, "Publishing to OneNote")
                 print("Publishing to OneNote...")
-                writer = OneNoteWriter()
+                writer = OneNoteWriter(user_id=user_id)
                 writer.write(brain)
                 onenote_success = True
                 print("[OK] OneNote page created successfully.")

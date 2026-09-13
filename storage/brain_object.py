@@ -45,6 +45,14 @@ def _ensure_indexes(col: Any) -> None:
         return
 
     try:
+        # Self-heal: drop legacy compound multikey index if still present.
+        current = col.index_information()
+        if "idx_user_library_active" in current:
+            try:
+                col.drop_index("idx_user_library_active")
+            except Exception:
+                pass
+
         col.create_index([("id", 1)], name="idx_reel_id")
         col.create_index([("is_archived", 1)], name="idx_is_archived")
         col.create_index([("timestamps.processed_at", -1)], name="idx_processed_at")
@@ -57,9 +65,13 @@ def _ensure_indexes(col: Any) -> None:
         )
         col.create_index([("ownership.saved_by", 1)], name="idx_ownership_saved_by")
         col.create_index([("ownership.created_by", 1)], name="idx_ownership_created_by")
+        # MongoDB-safe active-library indexes.  A compound multikey index may
+        # contain at most ONE array field, so saved_by and archived_by must
+        # never appear in the same compound index.
+        col.create_index([("ownership.archived_by", 1)], name="idx_ownership_archived_by")
         col.create_index(
-            [("ownership.saved_by", 1), ("ownership.archived_by", 1), ("timestamps.processed_at", -1)],
-            name="idx_user_library_active",
+            [("ownership.saved_by", 1), ("timestamps.processed_at", -1)],
+            name="idx_ownership_saved_processed_at",
         )
         _indexes_initialized = True
     except Exception:

@@ -1,5 +1,6 @@
 import os
 import re
+from datetime import datetime, timezone
 from onenote.formatter import escape_html as escape
 
 
@@ -15,13 +16,55 @@ GRAPH_SCOPES = ["User.Read", "Notes.ReadWrite"]
 TOKEN_CACHE_FILE = "token_cache.bin"
 
 
+def _load_user_microsoft_cache(user_id):
+    """Load the serialized MSAL token cache for a per-user Microsoft connection."""
+    try:
+        from storage.user import get_user_microsoft
+        ms_data = get_user_microsoft(user_id)
+        if ms_data and ms_data.get("token_cache"):
+            return ms_data["token_cache"]
+    except Exception:
+        pass
+    return None
+
+
+def _save_user_microsoft_cache(user_id, token_cache, refreshed_at):
+    """Write the serialized MSAL token cache back to the per-user MongoDB document."""
+    try:
+        from storage.user import update_user_microsoft
+        update_user_microsoft(user_id, {
+            "token_cache": token_cache,
+            "token_refreshed_at": refreshed_at,
+        })
+    except Exception:
+        pass
+
+
 class GraphClient:
-    def __init__(self):
+    def __init__(self, user_id=None):
+        """
+        Create a GraphClient for a ReelForge user.
+
+        Args:
+            user_id: ReelForge user_id ('usr_...'). When provided, the MSAL
+                token cache is loaded from the user's per-user Microsoft
+                connection in MongoDB and saved back there after
+                authentication. When None, the legacy global token_cache.bin is
+                used (preserving pre-V3.3 behavior).
+        """
+        self.user_id = user_id
         cache = SerializableTokenCache()
 
-        if os.path.exists(TOKEN_CACHE_FILE):
-            with open(TOKEN_CACHE_FILE, "r", encoding="utf-8") as f:
-                cache.deserialize(f.read())
+        if user_id:
+            stored_cache = _load_user_microsoft_cache(user_id)
+            self._had_stored_cache = bool(stored_cache)
+            if stored_cache:
+                cache.deserialize(stored_cache)
+        else:
+            self._had_stored_cache = False
+            if os.path.exists(TOKEN_CACHE_FILE):
+                with open(TOKEN_CACHE_FILE, "r", encoding="utf-8") as f:
+                    cache.deserialize(f.read())
 
         self.app = msal.PublicClientApplication(
             MICROSOFT_CLIENT_ID,
@@ -62,16 +105,42 @@ class GraphClient:
             )
 
         if not result:
+            if self.user_id:
+                if not self._had_stored_cache:
+                    raise Exception(
+                        "Microsoft account not connected. Please use /connect in Telegram."
+                    )
+                raise Exception(
+                    "Per-user Microsoft authentication failed for this account. "
+                    "Please reconnect via /connect in Telegram."
+                )
             used_interactive = True
             result = self.app.acquire_token_interactive(scopes=GRAPH_SCOPES)
 
         if "access_token" in result:
             self.access_token = result["access_token"]
-            if used_interactive and self.cache.has_state_changed:
+            if self.user_id:
+                if self.cache.has_state_changed:
+                    _save_user_microsoft_cache(
+                        self.user_id,
+                        self.cache.serialize(),
+                        datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                    )
+            elif used_interactive and self.cache.has_state_changed:
                 with open(TOKEN_CACHE_FILE, "w", encoding="utf-8") as f:
                     f.write(self.cache.serialize())
             print("[OK] Microsoft authentication successful.")
             return
+
+        if self.user_id:
+            if not self._had_stored_cache:
+                raise Exception(
+                    "Microsoft account not connected. Please use /connect in Telegram."
+                )
+            raise Exception(
+                "Per-user Microsoft authentication failed for this account. "
+                "Please reconnect via /connect in Telegram."
+            )
 
         raise Exception(result.get("error_description") or result.get("error"))
 
