@@ -21,11 +21,16 @@ Deliberately NOT implemented here (later layers):
 
 Security invariants:
   - Access tokens, refresh tokens, token caches, authorization codes, raw
-    OAuth state and PKCE verifiers are never logged and never appear in HTTP
-    responses or user-facing messages.
+    OAuth state, PKCE verifiers and the MSAL nonce are never logged and never
+    appear in HTTP responses or user-facing messages.
   - State is signed with OAUTH_STATE_SECRET (mandatory), stored only as a
     SHA-256 hash, bound to the ReelForge user, expiring, and single-use.
   - The OAuth session is consumed atomically (replay-safe).
+  - The non-secret MSAL flow fields (nonce, decorated scope,
+    claims_challenge) are persisted so the callback can reconstruct the exact
+    flow returned by initiate_auth_code_flow(); without the nonce MSAL's OIDC
+    validation raises KeyError on the success path, and without the decorated
+    scope offline_access would be dropped from the token request.
 """
 
 from __future__ import annotations
@@ -132,8 +137,11 @@ def start_oauth_for_user(user_id: str) -> str:
       2. Verify the ReelForge user exists.
       3. Generate an unguessable raw state and sign it.
       4. Let MSAL build the authorization URL with PKCE (S256) params.
-      5. Persist the OAuth session bound to user_id: only the state hash and the
-         PKCE verifier are stored (raw state is never stored/logged).
+      5. Persist the OAuth session bound to user_id: the state hash, the PKCE
+         verifier, and the non-secret MSAL flow fields (nonce, decorated scope,
+         claims_challenge) are stored. Raw state is never stored/logged.
+         nonce/scope are needed by MSAL's exchange to validate the ID token and
+         to keep offline_access in the token request.
 
     Returns the Microsoft authorization URL for the caller (bot, CLI, etc.).
     Raises ValueError for unknown users and RuntimeError for configuration or
@@ -166,6 +174,9 @@ def start_oauth_for_user(user_id: str) -> str:
         user_id,
         state_hash,
         code_verifier=flow.get("code_verifier") or "",
+        nonce=flow.get("nonce"),
+        scope=flow.get("scope"),
+        claims_challenge=flow.get("claims_challenge"),
     )
     if session_id is None:
         raise RuntimeError("Could not persist the OAuth session (storage unavailable).")
@@ -176,6 +187,14 @@ def start_oauth_for_user(user_id: str) -> str:
 def exchange_auth_code(signed_state: str, session: dict, code: str) -> tuple[str, str, dict]:
     """
     Redeem the authorization code for tokens using the session's PKCE verifier.
+
+    The MSAL flow dict returned by initiate_auth_code_flow() is reconstructed
+    here from the persisted session fields: state, redirect_uri, decorated
+    scope, code_verifier, plus the raw nonce (required by MSAL's OIDC success
+    path) and claims_challenge when present. Without the nonce, MSAL raises
+    KeyError as soon as the token response contains an ID token; without the
+    decorated scope, offline_access/openid/profile would vanish from the token
+    request.
 
     Returns (access_token, serialized_token_cache, msal_result). Raises
     CallbackRejectedError on any failure; never returns or exposes error details
@@ -191,9 +210,15 @@ def exchange_auth_code(signed_state: str, session: dict, code: str) -> tuple[str
     flow = {
         "state": signed_state,
         "redirect_uri": config.OAUTH_REDIRECT_URI,
-        "scope": MICROSOFT_SCOPES,
+        "scope": session.get("scope") or MICROSOFT_SCOPES,
         "code_verifier": code_verifier,
     }
+    nonce = session.get("nonce")
+    if nonce:
+        flow["nonce"] = nonce
+    claims_challenge = session.get("claims_challenge")
+    if claims_challenge:
+        flow["claims_challenge"] = claims_challenge
 
     try:
         result = public_client.acquire_token_by_auth_code_flow(
@@ -205,7 +230,15 @@ def exchange_auth_code(signed_state: str, session: dict, code: str) -> tuple[str
         raise CallbackRejectedError(_MSG_EXCHANGE_FAILED) from exc
 
     if not result or "access_token" not in result:
-        print("Notice: token exchange failed (no access_token).")
+        # Safe diagnostic only: error_description/error_uri are never logged in
+        # stdout (they may embed PII or URLs); only the non-secret error code,
+        # the numeric error_codes and the correlation_id are surfaced.
+        if isinstance(result, dict):
+            safe = {k: result.get(k) for k in ("error", "error_codes", "correlation_id", "suberror")}
+            safe = {k: v for k, v in safe.items() if v is not None}
+            print(f"Notice: token exchange failed (no access_token). MSAL diagnostic: {safe}")
+        else:
+            print("Notice: token exchange failed (no access_token).")
         raise CallbackRejectedError(_MSG_EXCHANGE_FAILED)
 
     return result["access_token"], cache.serialize(), result
@@ -285,6 +318,8 @@ def complete_oauth_callback(params: dict) -> dict:
         OAuth-error completion cannot be replayed.
       - No tokens, codes, or secrets ever reach the response body.
     """
+    # Safe operational log line: NO query parameters or state are ever printed.
+    print(f"OAuth callback received: {_now_iso()}")
     signed_state = params.get("state") or ""
     if not signed_state:
         return _reject_message(400, _MSG_STATE_MISSING)

@@ -12,6 +12,17 @@ Design rules:
   - Raw OAuth state strings and authorization codes are NEVER stored.
     Only a SHA-256 hash of the state is persisted.
   - code_verifier (for PKCE) is stored per session and never logged.
+  - The non-secret MSAL flow fields are stored verbatim so the callback can
+    reconstruct the exact flow that MSAL returns from initiate_auth_code_flow:
+      * nonce            – raw MSAL OIDC nonce (required by MSAL's OIDC
+                           validation on the success path; not a credential).
+      * scope            – the decorated scope set (includes openid/profile/
+                           offline_access appended by MSAL), preserved so the
+                           token request keeps the offline_access capabilities.
+      * claims_challenge – optional claims challenge dictionary when the app
+                           requests claims (may apply during provisioning).
+  - Authorization codes, access/refresh tokens and serialized token caches are
+    NEVER stored in oauth_sessions.
   - TTL index on expires_at removes stale sessions automatically; an explicit
     cleanup helper is also provided.
   - No credential material is ever written into Brain Objects.
@@ -80,6 +91,9 @@ def create_oauth_session(
     user_id: str,
     state_hash: str,
     code_verifier: str | None = None,
+    nonce: str | None = None,
+    scope: list | None = None,
+    claims_challenge: dict | str | None = None,
     ttl_seconds: int = DEFAULT_TTL_SECONDS,
 ) -> str | None:
     """
@@ -91,7 +105,16 @@ def create_oauth_session(
         user_id: canonical ReelForge user_id ('usr_...').
         state_hash: SHA-256 hex digest of the OAuth state (never the raw state).
         code_verifier: PKCE code verifier used at callback time (optional in Layer 1).
+        nonce: raw MSAL OIDC nonce from initiate_auth_code_flow(). Stored (not a
+            credential) so the callback can reconstruct the flow MSAL expects.
+        scope: the decorated scope list from initiate_auth_code_flow() (includes
+            openid/profile/offline_access). Preserved verbatim so the token
+            request keeps those capabilities.
+        claims_challenge: optional claims challenge from flow['claims_challenge'].
         ttl_seconds: lifetime of the session; the document expires afterwards.
+
+    Never stores: raw state, authorization codes, access/refresh tokens, or
+    serialized token caches.
     """
     if not user_id or not isinstance(user_id, str):
         raise ValueError("user_id must be a non-empty string")
@@ -110,6 +133,9 @@ def create_oauth_session(
         "user_id": user_id,
         "state_hash": state_hash,
         "code_verifier": code_verifier,
+        "nonce": nonce,
+        "scope": scope,
+        "claims_challenge": claims_challenge,
         "created_at": now,
         "expires_at": now + timedelta(seconds=max(ttl_seconds, 0)),
         "consumed": False,
