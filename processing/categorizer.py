@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from config import CATEGORIES
+from config import CATEGORIES, PROMPTS_DIR
 from processing.llm_client import generate_text
 
 # Build a lookup map for fast case-insensitive normalization.
@@ -48,7 +48,7 @@ def _normalize_category(raw: str) -> str:
 
 
 def categorize(caption, transcript):
-    prompt_path = Path("prompts") / "categorizer.txt"
+    prompt_path = Path(PROMPTS_DIR) / "categorizer.txt"
 
     prompt = prompt_path.read_text(encoding="utf-8")
 

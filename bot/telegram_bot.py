@@ -1,4 +1,8 @@
 import asyncio
+import datetime
+import io
+import json
+import os
 import sys
 from pathlib import Path
 
@@ -16,12 +20,23 @@ from telegram.ext import (
     filters,
 )
 
-from config import BOT_TOKEN, BRAINS_DIR, CATEGORIES
+from config import BOT_TOKEN, BRAINS_DIR, CATEGORIES, REELFORGE_EMBEDDED_WORKER
 from auth.oauth_server import start_oauth_for_user
 from onenote.sanitizer import sanitize_page_title
 from processing.pipeline import process_reel
+from processing.worker import worker_loop
+from bot.notifier import (
+    JobNotifier as _JobNotifier,
+    notifier_kind_for_job,
+    result_summary_text as _result_summary_text,
+    onenote_issue_message as _onenote_issue_message,
+    _first_available,
+    _list_items,
+)
 from storage.brain_object import (
     archive_brain_object,
+    associate_user_with_brain,
+    extract_reel_id_from_url,
     find_related_brain_objects,
     get_all_topics,
     get_brain_categories,
@@ -37,6 +52,7 @@ from storage.brain_object import (
     scan_valid_brain_objects,
     search_brain_objects,
 )
+from storage.job import get_job_for_user, list_jobs_for_user, submit_job
 from storage.user import disconnect_user_microsoft, get_user_microsoft
 
 # Callback action identifiers (never carry a user_id; the user is always
@@ -45,55 +61,6 @@ DISCONNECT_START = "disconnect:start"
 DISCONNECT_CONFIRM = "disconnect:confirm"
 DISCONNECT_CANCEL = "disconnect:cancel"
 STATUS_SHOW = "status:show"
-
-
-def _onenote_issue_message(onenote_error) -> str:
-    """Turn a known OneNote publishing failure into a short, safe, actionable
-    message. Never echoes technical detail or credential material."""
-    if not onenote_error:
-        return "OneNote publishing failed."
-    text = str(onenote_error)
-    lowered = text.lower()
-
-    if "not connected" in lowered and "/connect" in lowered:
-        return (
-            "Your Microsoft connection is not set up.\n\n"
-            "Use /connect to connect your Microsoft account."
-        )
-
-    if (
-        "reconnect via /connect" in lowered
-        or "authentication failed" in lowered
-        or "needs to be refreshed" in lowered
-        or "invalid_grant" in lowered
-    ):
-        return (
-            "Your Microsoft connection needs to be refreshed.\n\n"
-            "Please use /connect to reconnect your account."
-        )
-
-    if any(
-        marker in lowered
-        for marker in (
-            "token",
-            "refresh_token",
-            "access_token",
-            "token_cache",
-            "pkce",
-            "verifier",
-            "bearer",
-            "authorization code",
-            "secret",
-            "state=",
-            "grant",
-        )
-    ):
-        return (
-            "OneNote publishing failed.\n\n"
-            "Please check your Microsoft connection, or reconnect via /connect."
-        )
-
-    return text
 
 
 def _microsoft_status_text(user_id) -> str:
@@ -114,20 +81,6 @@ def _microsoft_status_text(user_id) -> str:
     )
 
 
-def _list_items(items):
-    if not items:
-        return "None identified."
-    return "\n".join(f"- {item}" for item in items)
-
-
-def _first_available(knowledge, keys):
-    for key in keys:
-        value = knowledge.get(key)
-        if value:
-            return value
-    return []
-
-
 def _truncate(text: str, max_len: int = 130) -> str:
     if not text:
         return ""
@@ -135,48 +88,6 @@ def _truncate(text: str, max_len: int = 130) -> str:
     if len(clean) <= max_len:
         return clean
     return clean[: max_len - 3] + "..."
-
-
-def _format_summary(result):
-    brain = result["brain"] or {}
-    knowledge = brain.get("knowledge") or {}
-    content = brain.get("content") or {}
-    source = brain.get("source") or {}
-    caption = content.get("caption") or ""
-    title = knowledge.get("title") or (
-        caption.splitlines()[0] if caption else source.get("shortcode", "Untitled")
-    )
-    category = result.get("category") or knowledge.get("category") or "Unknown"
-    summary = knowledge.get("summary") or "No summary available."
-    key_takeaways = _first_available(
-        knowledge,
-        ("tips", "use_cases", "concepts", "techniques", "steps", "workflows")
-    )
-    resources = []
-
-    for key in (
-        "websites",
-        "tools",
-        "apps",
-        "editing_apps",
-        "gear",
-        "equipment",
-        "models",
-        "calculators",
-    ):
-        resources.extend(knowledge.get(key) or [])
-
-    action_items = knowledge.get("action_items") or knowledge.get("tips") or []
-
-    return (
-        "InstaBrain Summary\n\n"
-        f"Title: {title}\n\n"
-        f"Summary:\n{summary}\n\n"
-        f"Category:\n{category}\n\n"
-        f"Key Takeaways:\n{_list_items(key_takeaways)}\n\n"
-        f"Resources:\n{_list_items(resources)}\n\n"
-        f"Action Items:\n{_list_items(action_items)}"
-    )
 
 
 def _format_reel_card(brain: dict, index: int | None = None) -> str:
@@ -397,6 +308,8 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "⚡ Ingestion & Lifecycle Commands:\n"
         "• /force <url> — Force-ingest a Reel URL (bypasses cache)\n"
         "• /reprocess <reel_id> — Re-extract an existing Reel using its source URL\n"
+        "• /job <job_id> — Check a processing job's status\n"
+        "• /jobs — List your recent jobs\n"
         "• /recat <reel_id> <category> — Change category and update schema locally\n"
         "• /archive <reel_id> — Move Reel to archive (hides from discovery)\n"
         "• /restore <reel_id> — Restore an archived Reel to active library\n"
@@ -549,13 +462,11 @@ async def get_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(detailed_text)
 
     reel_id = brain.get("id") or target_id
-    brain_file = Path(BRAINS_DIR) / f"{reel_id}.json"
-    if brain_file.exists():
-        with open(brain_file, "rb") as f:
-            await update.message.reply_document(
-                document=f,
-                filename=brain_file.name
-            )
+    serialized = json.dumps(brain, indent=4).encode("utf-8")
+    await update.message.reply_document(
+        document=io.BytesIO(serialized),
+        filename=f"{reel_id}.json",
+    )
 
 
 async def connect_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -739,6 +650,147 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # ---------------------------------------------------------------------------
+# Job Status / Lifecycle Observability (V3.5 Layer 3)
+# ---------------------------------------------------------------------------
+
+_JOB_STATUS_ICONS = {
+    "queued": "⏳",
+    "processing": "⚙️",
+    "completed": "✅",
+    "failed": "❌",
+}
+
+
+def _format_job_ts(value) -> str:
+    if isinstance(value, datetime.datetime):
+        return value.strftime("%Y-%m-%d %H:%M:%S UTC")
+    return _truncate(str(value), 40)
+
+
+def _format_job_status(job: dict) -> str:
+    """Concise, user-safe job status card (never raw Mongo, tokens, or other
+    users' data)."""
+    ts = job.get("timestamps") or {}
+    status = job.get("status") or "unknown"
+    icon = _JOB_STATUS_ICONS.get(status, "•")
+
+    lines = ["📋 Job Status", ""]
+    lines.append(f"Job: `{job.get('_id', '?')}`")
+    reel_id = job.get("reel_id")
+    if reel_id:
+        lines.append(f"Reel: `{reel_id}`")
+    lines.append(f"Status: {icon} {status}")
+    lines.append(f"Type: {job.get('job_type') or 'reel'}")
+    attempts = job.get("attempts") or 0
+    max_attempts = job.get("max_attempts") or 3
+    lines.append(f"Attempts: {attempts} / {max_attempts}")
+    if job.get("recovered"):
+        lines.append("Recovered after worker interruption")
+
+    if ts.get("created_at"):
+        lines.append(f"Created: {_format_job_ts(ts['created_at'])}")
+    if ts.get("started_at"):
+        lines.append(f"Started: {_format_job_ts(ts['started_at'])}")
+    if ts.get("finished_at"):
+        lines.append(f"Finished: {_format_job_ts(ts['finished_at'])}")
+
+    if status == "processing":
+        lease = job.get("lease") or {}
+        if lease.get("expires_at"):
+            lines.append(f"Lease expires: {_format_job_ts(lease['expires_at'])}")
+
+    if status == "completed":
+        result = job.get("result") or {}
+        bits = []
+        if result.get("category"):
+            bits.append(f"Category: {_truncate(str(result['category']), 40)}")
+        onenote = result.get("onenote_success")
+        if onenote is not None:
+            if onenote:
+                bits.append("OneNote: published")
+            else:
+                bits.append("OneNote: not published")
+        if bits:
+            lines.append("Result: " + " | ".join(bits))
+
+    if status == "failed" and job.get("error"):
+        lines.append("")
+        lines.append(f"Error: {_truncate(job.get('error'), 220)}")
+    return "\n".join(lines)
+
+
+async def job_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user, _ = _resolve_user(update)
+    user_id = (user or {}).get("user_id")
+
+    if not context.args:
+        await update.message.reply_text(
+            "⚠️ Please provide a job ID.\n\n"
+            "Example: /job job_abc123\n\n"
+            "💡 Use /jobs to see your recent jobs."
+        )
+        return
+
+    if not user_id:
+        await update.message.reply_text(
+            "⚠️ Could not resolve your account. Please try /start first."
+        )
+        return
+
+    job_id = context.args[0].strip()
+    job = get_job_for_user(job_id, user_id)
+    if job is None:
+        await update.message.reply_text(
+            f"❌ Job `{job_id}` not found or you are not authorized to view it.\n\n"
+            "Jobs are private — only the requesting user can inspect a job."
+        )
+        return
+
+    await update.message.reply_text(_format_job_status(job))
+
+
+async def jobs_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user, _ = _resolve_user(update)
+    user_id = (user or {}).get("user_id")
+
+    if not user_id:
+        await update.message.reply_text(
+            "⚠️ Could not resolve your account. Please try /start first."
+        )
+        return
+
+    limit = 5
+    if context.args:
+        try:
+            limit = int(context.args[0])
+        except (ValueError, TypeError):
+            limit = 5
+    limit = max(1, min(limit, 10))
+
+    jobs = list_jobs_for_user(user_id, limit=limit)
+    if not jobs:
+        await update.message.reply_text(
+            "📋 You have no recent jobs yet. Send a Reel URL to get started!"
+        )
+        return
+
+    lines = ["📋 Recent Jobs:", ""]
+    for job in jobs:
+        status = job.get("status") or "unknown"
+        icon = _JOB_STATUS_ICONS.get(status, "•")
+        reel = job.get("reel_id") or "?"
+        ts = (job.get("timestamps") or {}).get("created_at")
+        created = _format_job_ts(ts) if ts else "?"
+        lines.append(
+            f"• `{job.get('_id', '?')}` — {icon} {status} — "
+            f"reel `{reel}` — {created}"
+        )
+    lines.append("")
+    lines.append("💡 Use /job <job_id> for full details.")
+    await update.message.reply_text("\n".join(lines))
+
+
+# ---------------------------------------------------------------------------
 # Ingestion Flow (Writes & Ingestion Lock)
 # ---------------------------------------------------------------------------
 
@@ -756,51 +808,62 @@ async def receive(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    await update.message.reply_text(
-        "Reel received. Added to processing queue..."
+    chat = getattr(update, "effective_chat", None)
+    chat_id = getattr(chat, "id", None) or getattr(update.message, "chat_id", None)
+
+    # Instant cache-hit fast path (preserves today's behavior for repeat Reels).
+    candidate_id = extract_reel_id_from_url(message)
+    if candidate_id:
+        cached_brain = get_cached_brain_object(candidate_id)
+        if cached_brain is not None:
+            if user_id:
+                try:
+                    associate_user_with_brain(candidate_id, user_id)
+                except Exception as ae:
+                    print(f"Notice: Could not associate user with cached brain: {ae}")
+
+            result = {
+                "success": True,
+                "cached": True,
+                "onenote_success": True,
+                "onenote_error": None,
+                "brain": cached_brain,
+                "brain_path": str(Path(BRAINS_DIR) / f"{candidate_id}.json"),
+                "transcript": cached_brain.get("content", {}).get("transcript"),
+                "category": cached_brain.get("knowledge", {}).get("category"),
+                "knowledge": cached_brain.get("knowledge"),
+                "error": None,
+            }
+            await update.message.reply_text(_result_summary_text(result, "cached"))
+            brain_path = result["brain_path"]
+            if Path(brain_path).exists():
+                with open(brain_path, "rb") as f:
+                    await update.message.reply_document(
+                        document=f,
+                        filename=Path(brain_path).name,
+                    )
+            return
+
+    job, duplicate = submit_job(
+        claim_key=candidate_id or message,
+        reel_url=message,
+        user_id=user_id,
+        force=False,
+        reel_id=candidate_id,
+        chat_id=chat_id,
+        job_type="reel",
     )
 
-    loop = asyncio.get_running_loop()
-
-    def progress(message_text):
-        future = asyncio.run_coroutine_threadsafe(
-            update.message.reply_text(message_text),
-            loop
-        )
-        future.result()
-
-    async with _PROCESS_LOCK:
-        result = await asyncio.to_thread(process_reel, message, progress, False, user_id)
-
-    if not result["success"]:
+    if duplicate:
         await update.message.reply_text(
-            f"❌ Reel processing failed: {result.get('error', 'Unknown error')}"
+            "📥 This Reel is already being processed.\n"
+            f"Job: `{job['_id']}` — you'll receive the result here when it finishes."
         )
-        return
-
-    is_cached = result.get("cached", False)
-    onenote_success = result.get("onenote_success", False)
-    onenote_error = result.get("onenote_error")
-    category = result.get("category") or "Unknown"
-
-    if is_cached:
-        status_line = f"⚡ Already Processed (Cached Brain Object)\n✅ OneNote Section: {category}\n\n"
-    elif onenote_success:
-        status_line = f"✅ OneNote Page Created in Section: {category}\n\n"
     else:
-        status_line = f"⚠️ Saved to Brain Object, but OneNote publishing failed: {_onenote_issue_message(onenote_error)}\n\n"
-
-    summary_text = status_line + _format_summary(result)
-    await update.message.reply_text(summary_text)
-
-    brain_path = result.get("brain_path")
-
-    if brain_path is not None and Path(brain_path).exists():
-        with open(brain_path, "rb") as f:
-            await update.message.reply_document(
-                document=f,
-                filename=Path(brain_path).name
-            )
+        await update.message.reply_text(
+            "📥 Reel received. Queued for processing.\n"
+            f"Job: `{job['_id']}`"
+        )
 
 
 async def force_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -822,47 +885,30 @@ async def force_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    await update.message.reply_text(
-        "⚡ Force ingestion requested. Bypassing cache..."
+    chat = getattr(update, "effective_chat", None)
+    chat_id = getattr(chat, "id", None) or getattr(update.message, "chat_id", None)
+    reel_id = extract_reel_id_from_url(url)
+
+    job, duplicate = submit_job(
+        claim_key=reel_id or url,
+        reel_url=url,
+        user_id=user_id,
+        force=True,
+        reel_id=reel_id,
+        chat_id=chat_id,
+        job_type="force",
     )
 
-    loop = asyncio.get_running_loop()
-
-    def progress(message_text):
-        future = asyncio.run_coroutine_threadsafe(
-            update.message.reply_text(message_text),
-            loop
-        )
-        future.result()
-
-    async with _PROCESS_LOCK:
-        result = await asyncio.to_thread(process_reel, url, progress, True, user_id)
-
-    if not result["success"]:
+    if duplicate:
         await update.message.reply_text(
-            f"❌ Force processing failed: {result.get('error', 'Unknown error')}"
+            "⚡ Force ingestion requested — a job for this Reel is already running.\n"
+            f"Job: `{job['_id']}`"
         )
-        return
-
-    onenote_success = result.get("onenote_success", False)
-    onenote_error = result.get("onenote_error")
-    category = result.get("category") or "Unknown"
-
-    if onenote_success:
-        status_line = f"⚡ Force-Processed (Fresh Extraction)\n✅ OneNote Page Created in Section: {category}\n\n"
     else:
-        status_line = f"⚡ Force-Processed (Fresh Extraction)\n⚠️ Saved to Brain Object, but OneNote publishing failed: {_onenote_issue_message(onenote_error)}\n\n"
-
-    summary_text = status_line + _format_summary(result)
-    await update.message.reply_text(summary_text)
-
-    brain_path = result.get("brain_path")
-    if brain_path is not None and Path(brain_path).exists():
-        with open(brain_path, "rb") as f:
-            await update.message.reply_document(
-                document=f,
-                filename=Path(brain_path).name
-            )
+        await update.message.reply_text(
+            "⚡ Force ingestion requested. Queued, bypassing cache...\n"
+            f"Job: `{job['_id']}`"
+        )
 
 
 async def reprocess_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -907,49 +953,31 @@ async def reprocess_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    await update.message.reply_text(
-        f"🔄 Reprocessing Reel `{reel_id}`...\n"
-        f"🔗 Source: {source_url}\n"
-        "Re-running Whisper, Vision, and LLM extraction..."
+    chat = getattr(update, "effective_chat", None)
+    chat_id = getattr(chat, "id", None) or getattr(update.message, "chat_id", None)
+
+    job, duplicate = submit_job(
+        claim_key=reel_id,
+        reel_url=source_url,
+        user_id=user_id,
+        force=True,
+        reel_id=reel_id,
+        chat_id=chat_id,
+        job_type="reprocess",
     )
 
-    loop = asyncio.get_running_loop()
-
-    def progress(message_text):
-        future = asyncio.run_coroutine_threadsafe(
-            update.message.reply_text(message_text),
-            loop
-        )
-        future.result()
-
-    async with _PROCESS_LOCK:
-        result = await asyncio.to_thread(process_reel, source_url, progress, True, user_id)
-
-    if not result["success"]:
+    if duplicate:
         await update.message.reply_text(
-            f"❌ Reprocessing failed: {result.get('error', 'Unknown error')}"
+            f"🔄 Reprocessing Reel `{reel_id}` — a job is already running.\n"
+            f"Job: `{job['_id']}`"
         )
-        return
-
-    onenote_success = result.get("onenote_success", False)
-    onenote_error = result.get("onenote_error")
-    category = result.get("category") or "Unknown"
-
-    if onenote_success:
-        status_line = f"🔄 Successfully Reprocessed `{reel_id}`\n✅ OneNote Page Created in Section: {category}\n\n"
     else:
-        status_line = f"🔄 Successfully Reprocessed `{reel_id}`\n⚠️ Saved to Brain Object, but OneNote publishing failed: {_onenote_issue_message(onenote_error)}\n\n"
-
-    summary_text = status_line + _format_summary(result)
-    await update.message.reply_text(summary_text)
-
-    brain_path = result.get("brain_path")
-    if brain_path is not None and Path(brain_path).exists():
-        with open(brain_path, "rb") as f:
-            await update.message.reply_document(
-                document=f,
-                filename=Path(brain_path).name
-            )
+        await update.message.reply_text(
+            f"🔄 Reprocessing Reel `{reel_id}` queued.\n"
+            f"🔗 Source: {source_url}\n"
+            f"Job: `{job['_id']}`\n"
+            "Re-running Whisper, Vision, and LLM extraction..."
+        )
 
 
 async def archive_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1172,7 +1200,39 @@ async def creator_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 def run_bot():
-    app = ApplicationBuilder().token(BOT_TOKEN).build()
+    async def _start_job_worker(_app):
+        loop = asyncio.get_running_loop()
+
+        def make_notifier(job):
+            kind = notifier_kind_for_job(job)
+            return _JobNotifier(
+                bot=_app.bot,
+                loop=loop,
+                chats=job.get("chats") or [],
+                kind=kind,
+            )
+
+        _app.job_worker_task = loop.create_task(
+            worker_loop(
+                make_notifier=make_notifier,
+                worker_id=f"bot-{os.getpid()}",
+                poll_interval=2.0,
+            )
+        )
+        return _app
+
+    async def _stop_job_worker(_app):
+        task = getattr(_app, "job_worker_task", None)
+        if task is not None:
+            task.cancel()
+
+    builder = ApplicationBuilder().token(BOT_TOKEN)
+    if REELFORGE_EMBEDDED_WORKER:
+        builder = builder.post_init(_start_job_worker).post_shutdown(_stop_job_worker)
+        print("Embedded worker: ON (single-process mode). Set REELFORGE_EMBEDDED_WORKER=0 to run a standalone worker instead.")
+    else:
+        print("Embedded worker: OFF (standalone mode). Job processing handled by `python -m processing.worker`.")
+    app = builder.build()
 
     # Register discovery & lifecycle commands
     app.add_handler(CommandHandler("start", start))
@@ -1188,6 +1248,8 @@ def run_bot():
     app.add_handler(CommandHandler("stats", stats_command))
     app.add_handler(CommandHandler("force", force_command))
     app.add_handler(CommandHandler("reprocess", reprocess_command))
+    app.add_handler(CommandHandler("job", job_command))
+    app.add_handler(CommandHandler("jobs", jobs_command))
     app.add_handler(CommandHandler("archive", archive_command))
     app.add_handler(CommandHandler("restore", restore_command))
     app.add_handler(CommandHandler("recat", recat_command))

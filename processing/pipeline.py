@@ -1,8 +1,9 @@
 import traceback
 from pathlib import Path
 
-from config import BRAINS_DIR, KEEP_VIDEOS, WORKSPACE_DIR
+from config import BRAINS_DIR, KEEP_VIDEOS
 from download.downloader import acquire_reel
+from processing.worker_workspace import effective_workspace
 from storage.brain_object import (
     compute_provenance,
     extract_reel_id_from_url,
@@ -25,22 +26,26 @@ def _cleanup_reel_media(reel_id: str | None):
     """
     Remove local media files belonging to this specific reel if KEEP_VIDEOS is False.
     Never deletes Brain Objects or files belonging to other reels.
+
+    Only exact per-reel filenames (<reel_id>.<ext>) are removed. A broader
+    glob like "<reel_id>*.*" is intentionally avoided because Instagram reel
+    IDs can be numeric prefixes of one another (e.g. '123' vs '1234') and
+    could delete another job's media during concurrent processing.
     """
     if KEEP_VIDEOS or not reel_id:
         return
 
-    reels_dir = Path(WORKSPACE_DIR)
+    reels_dir = effective_workspace()
     if not reels_dir.exists():
         return
 
-    for pattern in (f"{reel_id}.*", f"{reel_id}*.*"):
-        for file in reels_dir.glob(pattern):
-            if file.is_file():
-                try:
-                    file.unlink()
-                    print(f"Cleaned up reel media file: {file.name}")
-                except Exception as e:
-                    print(f"Notice: Could not unlink {file.name}: {e}")
+    for file in reels_dir.glob(f"{reel_id}.*"):
+        if file.is_file():
+            try:
+                file.unlink()
+                print(f"Cleaned up reel media file: {file.name}")
+            except Exception as e:
+                print(f"Notice: Could not unlink {file.name}: {e}")
 
 
 def _latest_brain_path():
@@ -229,7 +234,7 @@ def process_reel(url, progress_callback=None, force=False, user_id: str | None =
                 _notify(progress_callback, "Publishing to OneNote")
                 print("Publishing to OneNote...")
                 writer = OneNoteWriter(user_id=user_id)
-                writer.write(brain)
+                writer.write(brain, force=force)
                 onenote_success = True
                 print("[OK] OneNote page created successfully.")
             except Exception as e:

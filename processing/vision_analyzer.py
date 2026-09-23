@@ -17,10 +17,11 @@ from config import (
     FFMPEG_PATH,
     OMNIROUTE_API_KEY,
     OMNIROUTE_BASE_URL,
+    PROMPTS_DIR,
     VISION_MAX_FRAMES,
     VISION_MODEL,
-    WORKSPACE_DIR,
 )
+from processing.worker_workspace import effective_workspace
 from storage.brain_object import (
     load_latest_brain_object,
     update_latest_vision_analysis,
@@ -90,15 +91,15 @@ def _get_video_duration(video_path: Path) -> float | None:
 
 def get_latest_reel_path() -> Path:
     """
-    Find the most recently modified MP4 video in WORKSPACE_DIR.
+    Find the most recently modified MP4 video in the effective workspace.
     """
-    reels_folder = Path(WORKSPACE_DIR)
+    reels_folder = effective_workspace()
     if not reels_folder.exists():
-        raise FileNotFoundError(f"Reels directory not found: {WORKSPACE_DIR}")
+        raise FileNotFoundError(f"Reels directory not found: {reels_folder}")
 
     mp4_files = list(reels_folder.glob("*.mp4"))
     if not mp4_files:
-        raise FileNotFoundError(f"No MP4 files found in {WORKSPACE_DIR}")
+        raise FileNotFoundError(f"No MP4 files found in {reels_folder}")
 
     return max(mp4_files, key=lambda f: f.stat().st_mtime)
 
@@ -242,7 +243,7 @@ def _build_prompt(caption: str = "", transcript: str = "") -> str:
     """
     Load the vision analyzer prompt template and inject caption & transcript.
     """
-    prompt_path = Path("prompts") / "vision_analyzer.txt"
+    prompt_path = Path(PROMPTS_DIR) / "vision_analyzer.txt"
     if not prompt_path.exists():
         raise FileNotFoundError(f"Prompt template missing: {prompt_path}")
 

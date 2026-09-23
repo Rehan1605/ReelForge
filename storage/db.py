@@ -256,6 +256,46 @@ def ensure_brain_indexes(col: Collection | None = None) -> None:
         pass
 
 
+def ensure_job_indexes(col: Collection | None = None) -> None:
+    """
+    Ensure required durability, dedupe, and recovery indexes exist on the MongoDB
+    reel_jobs collection. Executes safely and idempotently.
+
+    The partial unique index is the duplicate-concurrency guard: only documents
+    with ``active: true`` (queued/processing) are indexed, so one reel can only
+    ever have a single in-flight job while completed/failed jobs stay listable.
+    """
+    if col is None:
+        try:
+            col = get_collection("reel_jobs")
+        except Exception:
+            return
+
+    try:
+        col.create_index(
+            [("claim_key", 1), ("active", 1)],
+            name="idx_job_claim_active_unique",
+            unique=True,
+            partialFilterExpression={"active": {"$eq": True}},
+        )
+        col.create_index([("status", 1)], name="idx_job_status")
+        col.create_index(
+            [("status", 1), ("lease.expires_at", 1)],
+            name="idx_job_status_lease",
+        )
+        col.create_index(
+            [("user_id", 1), ("timestamps.created_at", -1)],
+            name="idx_job_user_created",
+        )
+        col.create_index(
+            [("requested_by", 1), ("timestamps.created_at", -1)],
+            name="idx_job_requested_by_created",
+        )
+    except Exception:
+        # Non-fatal if index creation fails due to permissions or cluster state
+        pass
+
+
 def close_mongo_client() -> None:
     """
     Cleanly close the MongoDB client connection pool.

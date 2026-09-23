@@ -3,12 +3,12 @@ from pathlib import Path
 
 from yt_dlp import YoutubeDL
 
-from config import WORKSPACE_DIR
+from processing.worker_workspace import effective_workspace
 from storage.brain_object import create_brain_object
 
 
 def clear_workspace():
-    reels_folder = Path(WORKSPACE_DIR)
+    reels_folder = effective_workspace()
 
     if not reels_folder.exists():
         return
@@ -21,10 +21,11 @@ def clear_workspace():
 
 
 def _download_with_ytdlp(url):
-    Path(WORKSPACE_DIR).mkdir(exist_ok=True)
+    out_dir = effective_workspace()
+    out_dir.mkdir(parents=True, exist_ok=True)
 
     options = {
-        "outtmpl": str(Path(WORKSPACE_DIR) / "%(id)s.%(ext)s"),
+        "outtmpl": str(out_dir / "%(id)s.%(ext)s"),
         "format": "bestvideo+bestaudio/best",
         "merge_output_format": "mp4",
         "noplaylist": True,

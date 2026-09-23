@@ -1,9 +1,29 @@
 import os
+
 from onenote.formatter import format_brain_object
 from onenote.graph_client import GraphClient
 from onenote.sanitizer import sanitize_page_title
+from storage.publication import (
+    await_publication,
+    claim_publication_slot,
+    complete_publication,
+    fail_publication_slot,
+)
 
 NOTEBOOK_NAME = "InstaBrain"
+
+PUBLISH_RETRY_WAIT_SECONDS = 45
+
+
+def _replay_publication(record):
+    """Synthesize a create_page-like response from a recorded publication."""
+    return {
+        "id": record.get("page_id"),
+        "links": {"oneNoteWebUrl": {"href": record.get("page_url")}},
+        "title": record.get("title"),
+        "section_id": record.get("section_id"),
+        "reused": True,
+    }
 
 CATEGORY_SECTIONS = {
     "Programming": "Programming",
@@ -100,11 +120,49 @@ class OneNoteWriter:
 
         return sanitize_page_title(title)
 
-    def write(self, brain):
+    def write(self, brain, force=False, col=None):
+        """Publish a Brain Object to OneNote idempotently per (reel, user).
+
+        A per-user publication slot is reserved first (see
+        storage.publication). Once a page is recorded as ``complete``, later
+        calls reuse the recorded page identity without touching Graph — so a
+        crash-recovered job never blindly creates a duplicate page. ``force``
+        (reprocess) intentionally creates a fresh replacement page.
+
+        Args:
+            brain:  Brain Object dict.
+            force:  Force a fresh page even when a completed page exists.
+            col:    Optional brains collection (offline tests). When None the
+                    configured MongoDB brains collection is used.
+        """
         try:
+            reel_id = brain["id"]
+            claim = claim_publication_slot(reel_id, self.user_id, force=force, col=col)
+            action = claim["action"]
+
+            if action == "reuse":
+                record = claim["record"]
+                if record.get("page_id"):
+                    return _replay_publication(record)
+                raise Exception("Publication record is incomplete.")
+
+            if action == "wait":
+                record = await_publication(
+                    reel_id, self.user_id, col=col, timeout=PUBLISH_RETRY_WAIT_SECONDS
+                )
+                if not record:
+                    raise Exception("Timed out waiting for a concurrent OneNote publish.")
+                if record.get("state") != "complete":
+                    raise Exception("A concurrent OneNote publish did not complete.")
+                if not record.get("page_id"):
+                    raise Exception("Publication record is incomplete.")
+                return _replay_publication(record)
+
+            # We own the slot: create a fresh page (first publish or force).
             category = brain["knowledge"]["category"]
             title = self._page_title(brain)
             section = self.get_section_for_category(category)
+            section_name = CATEGORY_SECTIONS.get(category)
 
             # Check for local thumbnail file
             media = brain.get("media") or {}
@@ -113,12 +171,37 @@ class OneNoteWriter:
 
             html_content = format_brain_object(brain, include_thumbnail=has_thumbnail)
 
-            return self.client.create_page(
-                section["id"],
-                title,
-                html_content,
-                thumbnail_path=thumbnail_path if has_thumbnail else None,
+            try:
+                response = self.client.create_page(
+                    section["id"],
+                    title,
+                    html_content,
+                    thumbnail_path=thumbnail_path if has_thumbnail else None,
+                )
+            except Exception as e:
+                fail_publication_slot(
+                    reel_id, self.user_id, claim["record"].get("owner_token"),
+                    str(e) or "OneNote page creation failed", col=col,
+                )
+                raise
+
+            links = response.get("links") or {}
+            page_url = (links.get("oneNoteWebUrl") or {}).get("href")
+
+            complete_publication(
+                reel_id, self.user_id, claim["record"].get("owner_token"),
+                {
+                    "page_id": response.get("id"),
+                    "page_url": page_url,
+                    "section_id": section.get("id"),
+                    "section_name": section_name,
+                    "notebook_name": self._notebook_name(),
+                    "title": title,
+                },
+                col=col,
             )
+
+            return response
         except Exception as e:
             if not self.user_id:
                 raise

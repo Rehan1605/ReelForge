@@ -1,0 +1,35 @@
+# VCS
+.git
+.gitignore
+
+# Secrets / local credentials — never enter the image
+.env
+.env.local
+*.env
+atlas-credentials.env
+token_cache.bin
+*.log
+
+# Python caches / build noise
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.coverage
+
+# Generated / local-only data (runtime writable dirs, not shipped)
+reels/
+brains/
+sessions/
+evaluation/results/
+preview.html
+
+# Local-only tests and helper scripts (not part of the runtime image)
+scratch/
+
+# OS / editor artifacts
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.zip

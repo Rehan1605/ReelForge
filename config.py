@@ -1,6 +1,8 @@
 import os
 from pathlib import Path
 
+ROOT_DIR = Path(__file__).resolve().parent
+
 
 def _load_env_file(file_path: str = ".env"):
     env_path = Path(file_path)
@@ -27,8 +29,8 @@ def _required_env(name):
     return value
 
 
-_load_env_file(".env")
-_load_env_file("atlas-credentials.env")
+_load_env_file(ROOT_DIR / ".env")
+_load_env_file(ROOT_DIR / "atlas-credentials.env")
 
 MICROSOFT_CLIENT_ID = _required_env("MICROSOFT_CLIENT_ID")
 
@@ -61,25 +63,46 @@ BOT_TOKEN = _required_env("TELEGRAM_BOT_TOKEN")
 MONGODB_URI = os.getenv("MONGODB_URI", "").strip()
 MONGODB_DB_NAME = os.getenv("MONGODB_DB_NAME", "reelforge").strip()
 
-FFMPEG_PATH = os.getenv(
-    "FFMPEG_PATH",
-    r"C:\Users\Rehan's Lenovo\AppData\Local\Microsoft\WinGet\Packages\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-8.1.1-full_build\bin",
-)
+# FFmpeg binary directory. On Windows/this laptop, defaults to the installed
+# WinGet build. On Linux/cloud workers, defaults to "" so ffmpeg/ffprobe are
+# resolved from the system PATH (e.g. apt-installed ffmpeg in the container).
+def _default_ffmpeg_path() -> str:
+    if os.name == "nt":
+        return r"C:\Users\Rehan's Lenovo\AppData\Local\Microsoft\WinGet\Packages\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-8.1.1-full_build\bin"
+    return ""
+
+
+FFMPEG_PATH = os.getenv("FFMPEG_PATH", _default_ffmpeg_path()).strip()
 
 TEXT_MODEL = os.getenv("TEXT_MODEL", "qwen2.5:7b-instruct")
 EVALUATION_MODEL = os.getenv("EVALUATION_MODEL", TEXT_MODEL)
 VISION_MODEL = os.getenv("VISION_MODEL", "llama3.2-vision:latest")
-OMNIROUTE_BASE_URL = os.getenv("OMNIROUTE_BASE_URL", os.getenv("OPENAI_BASE_URL", "http://localhost:20128/v1"))
-OMNIROUTE_API_KEY = os.getenv("OMNIROUTE_API_KEY", os.getenv("OPENAI_API_KEY", "")).strip()
+# AI gateway routing: explicit OMNIROUTE_BASE_URL wins, then OPENAI_BASE_URL
+# fallback, then the current local OmniRoute default. This lets the gateway be
+# hosted anywhere (env config only) while keeping local development unchanged.
+OMNIROUTE_BASE_URL = (os.getenv("OMNIROUTE_BASE_URL") or os.getenv("OPENAI_BASE_URL") or "http://localhost:20128/v1")
+# Remote gateways may require an API key; keys come only from the environment.
+OMNIROUTE_API_KEY = (os.getenv("OMNIROUTE_API_KEY") or os.getenv("OPENAI_API_KEY") or "").strip()
 VISION_MAX_FRAMES = int(os.getenv("VISION_MAX_FRAMES", "8"))
 
-WORKSPACE_DIR = "reels"
+WORKSPACE_DIR = os.getenv("WORKSPACE_DIR", str(ROOT_DIR / "reels")).strip()
 
-BRAINS_DIR = "brains"
+BRAINS_DIR = os.getenv("BRAINS_DIR", str(ROOT_DIR / "brains")).strip()
+
+PROMPTS_DIR = os.getenv("PROMPTS_DIR", str(ROOT_DIR / "prompts")).strip()
 
 KEEP_VIDEOS = False
 
-WHISPER_MODEL = "base"
+# V3.5 Layer 2 — embedded worker toggle.
+# Default ON for single-process local development.
+# Set to 0 / false / no to disable the in-process worker inside run_bot(),
+# so you can run ``python -m processing.worker`` as a separate process instead.
+REELFORGE_EMBEDDED_WORKER = os.getenv("REELFORGE_EMBEDDED_WORKER", "1").strip().lower() not in (
+    "0", "false", "no",
+)
+
+WHISPER_MODEL = os.getenv("WHISPER_MODEL", "base").strip()
+WHISPER_CACHE_DIR = os.getenv("WHISPER_CACHE_DIR", "").strip() or None
 
 OLLAMA_MODEL = "llama3.2-vision"
 

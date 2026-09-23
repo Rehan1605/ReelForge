@@ -18,7 +18,8 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
-from config import BRAINS_DIR, CATEGORIES, WORKSPACE_DIR
+from config import BRAINS_DIR, CATEGORIES
+from processing.worker_workspace import effective_workspace
 
 try:
     from pymongo import ReturnDocument
@@ -214,7 +215,7 @@ def extract_reel_id_from_url(url: str) -> str | None:
 
 def _latest_file(pattern: str) -> Path:
     return max(
-        Path(WORKSPACE_DIR).glob(pattern),
+        effective_workspace().glob(pattern),
         key=lambda f: f.stat().st_mtime
     )
 
@@ -224,7 +225,7 @@ def _latest_thumbnail() -> Path | None:
     thumbnails = []
 
     for pattern in thumbnail_patterns:
-        thumbnails.extend(Path(WORKSPACE_DIR).glob(pattern))
+        thumbnails.extend(effective_workspace().glob(pattern))
 
     if not thumbnails:
         return None
@@ -389,7 +390,8 @@ def create_brain_object(
     reel_id = metadata.get("id") or shortcode
     caption = metadata.get("description") or ""
 
-    target_mp4 = Path(WORKSPACE_DIR) / f"{reel_id}.mp4"
+    active_workspace = effective_workspace()
+    target_mp4 = active_workspace / f"{reel_id}.mp4"
     if target_mp4.is_file():
         mp4_file = target_mp4
     else:
@@ -397,7 +399,7 @@ def create_brain_object(
 
     thumbnail_file = None
     for ext in ("jpg", "jpeg", "png", "webp"):
-        candidate = Path(WORKSPACE_DIR) / f"{reel_id}.{ext}"
+        candidate = active_workspace / f"{reel_id}.{ext}"
         if candidate.is_file():
             thumbnail_file = candidate
             break

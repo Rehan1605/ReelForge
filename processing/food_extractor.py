@@ -1,12 +1,13 @@
 from pathlib import Path
 
+from config import PROMPTS_DIR
 from processing.knowledge_schema import normalize_knowledge_schema
 from processing.llm_client import generate_json
 from processing.vision_analyzer import format_vision_analysis
 
 
 def extract_food_knowledge(caption, transcript, vision_analysis=None):
-    prompt_path = Path("prompts") / "food_extractor.txt"
+    prompt_path = Path(PROMPTS_DIR) / "food_extractor.txt"
 
     prompt = prompt_path.read_text(encoding="utf-8")
 
