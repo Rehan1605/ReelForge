@@ -4,6 +4,16 @@
 
 ---
 
+## [V3.6.3 OAuth Cloud Lifecycle] - 2026-09-24
+### Added
+- Managed OAuth callback server lifecycle helpers in `auth/oauth_server.py`: `start_oauth_server()`, `stop_oauth_server()`, and `get_oauth_server()` with `threading.RLock()` thread safety and singleton idempotency.
+- Configurable embedded OAuth server toggle `REELFORGE_START_OAUTH_SERVER` in `config.py` and `WORKER.env.example` (defaulting to `0`/off for local dev compatibility).
+- Telegram bot application lifecycle hooks in `bot/telegram_bot.py`: non-blocking `_start_oauth_server_task` on `post_init` and `_stop_oauth_server_task` on `post_shutdown`.
+- Dedicated unit test suite `tests/test_v36_oauth_lifecycle.py` (14 tests, 100% passing).
+- Explicit `Content-Length` and `Connection: close` headers in `OAuthCallbackHTTPHandler` ensuring clean socket teardown.
+
+---
+
 ## [V3.6 Test Suite Migration] - 2026-09-24
 ### Added
 - Tracked regression test suite in `tests/` containing all 11 active V3 test suites (244 tests, 100% passing).

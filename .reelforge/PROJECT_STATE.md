@@ -1,10 +1,10 @@
 # ReelForge Project State — Single Source of Truth
 
 > **Current as of**: 2026-09-24
-> **Branch**: `main` (last commit `7b40d35`, synchronized with `origin/main`)
+> **Branch**: `main` (last commit `ce33ca5`, ahead of `origin/main` by 2 commits)
 > **Current Version**: V3.6
-> **Current Layer**: Layer 2 (Worker Workspace Isolation)
-> **Layer Status**: COMPLETE & PUSHED (Code: `d500583` | Brain Checkpoint 2: `7b40d35`)
+> **Current Layer**: Layer 3 (Managed OAuth Callback Server Lifecycle & Cloud Configuration)
+> **Layer Status**: IMPLEMENTED & VERIFIED (Tests: 258/258 passing)
 
 ---
 
@@ -14,12 +14,12 @@
 
 ReelForge is an automated Instagram reel knowledge extraction and personal intelligence engine. It downloads reels, transcribes audio (Whisper), performs multimodal visual analysis (OmniRoute LLM / Gemini / Llama vision), categorizes domain knowledge, stores structured Brain Objects in MongoDB Atlas (authoritative) with local JSON backup, and publishes rich formatted notes into user-specific Microsoft OneNote notebooks via Microsoft Graph.
 
-The system has completed **V3.6 Layer 2** of the V3 multi-tenant and cloud worker architecture:
+The system is actively progressing through the **Cloud Runtime Deployment** milestone:
 - V3.1 through V3.3 were previously committed (`68a5084`, `7241185`, `87739d9`, `d8bebfe`).
-- V3.4 (Cloud Portability), V3.5 (Durable Jobs & Worker Reliability), V3.6.1 (Storage Audit), and V3.6.2 (Worker Workspace Isolation) have been implemented, tested, and committed in Checkpoint 1 (`d500583`).
-- Checkpoint 2 established the permanent Project Brain (`.reelforge/` and `AGENTS.md`) in commit `7b40d35`, which is pushed and synchronized with `origin/main`.
-- All 244 V3 unit and integration tests are tracked in `tests/` and pass (100% pass rate).
-- Application code is completely clean and untouched.
+- V3.4 (Cloud Portability), V3.5 (Durable Jobs & Worker Reliability), V3.6.1 (Storage Audit), and V3.6.2 (Worker Workspace Isolation) were committed in `d500583`.
+- V3.6 test suite was migrated to tracked `tests/` in commit `ce33ca5` (244 tests).
+- V3.6.3 implements production-manageable OAuth callback server configuration (`OAUTH_HOST`, `REELFORGE_START_OAUTH_SERVER`), thread-safe `RLock` lifecycle management (`start_oauth_server`, `stop_oauth_server`), and Telegram bot hook integration (`_on_post_init`, `_on_post_shutdown`).
+- All 258 V3 unit and integration tests are tracked in `tests/` and pass (100% pass rate).
 
 ---
 
@@ -44,26 +44,28 @@ The distinction between **Committed**, **Implemented**, **Tested**, **Verified**
 | **V3.5** | Durable Job Queue & Worker Reliability | Verified | Committed (`d500583`) | Layers 1–5: `storage/job.py`, `storage/publication.py`, `processing/worker.py`, `bot/notifier.py`; tests: `tests/test_v35_layer*.py` (pass) |
 | **V3.6.1** | Storage Lifecycle Audit & Operations Doc | Verified | Committed (`d500583`) | `WORKER_OPERATIONS.md`, `tests/test_v36_layer1_storage_audit.py` (19/19 pass) |
 | **V3.6.2** | Worker Workspace Isolation | Verified | Committed (`d500583`) | `processing/worker_workspace.py`, pipeline routing; `tests/test_v36_layer2_workspace.py` (59/59 pass) |
+| **V3.6.3** | Managed OAuth Lifecycle & Cloud Configuration | Verified | Implemented (Working Tree) | `auth/oauth_server.py`, `bot/telegram_bot.py`, `config.py`; `tests/test_v36_oauth_lifecycle.py` (14/14 pass) |
 
 ---
 
 ## 3. Working Tree & Git Status
 
 Current Git Status on branch `main`:
-- **Last Committed Checkpoint**: `c7e1263` (*docs(reelforge): finalize V3.6 project state reconciliation*).
-- **Current Working Tree State**: Application code is 100% clean and untouched. The `tests/` directory is established containing the tracked V3 test suite (11 suites, 244 tests).
+- **Last Committed Checkpoint**: `ce33ca5` (*test(v3.6): establish tracked V3 regression test suite*).
+- **Current Working Tree State**: Working tree contains V3.6.3 OAuth lifecycle changes and new test suite `tests/test_v36_oauth_lifecycle.py`. 258/258 tests pass.
 
 ---
 
 ## 4. Test Verification Summary
 
 All test suites verified from tracked `tests/` on 2026-09-24:
+- **V3.6 Layer 3 Managed OAuth Lifecycle**: `tests/test_v36_oauth_lifecycle.py` — **14/14 PASSED** (0 failures, 0 errors in 3.62s).
 - **V3.6 Layer 2 Workspace Isolation**: `tests/test_v36_layer2_workspace.py` — **59/59 PASSED** (0 failures, 0 errors in 0.75s).
 - **V3.6 Layer 1 Storage Lifecycle Audit**: `tests/test_v36_layer1_storage_audit.py` — **19/19 PASSED** (0 failures, 0 errors in 0.68s).
-- **Full V3 Test Suite**: `python -m unittest discover -s tests -p "test_v3*.py"` — **244/244 PASSED** (0 failures, 0 errors in 1.58s).
+- **Full V3 Test Suite**: `python -m unittest discover -s tests -p "test_v3*.py"` — **258/258 PASSED** (0 failures, 0 errors in 5.15s).
 
 > **Test Tracking Status**:
-> The complete active V3 regression test suite (11 test files, 244 tests) is now tracked in version control under `tests/`. Exploratory, manual verification, and evaluation scripts remain in `scratch/`.
+> The complete active V3 regression test suite (12 test files, 258 tests) is tracked in version control under `tests/`. Exploratory, manual verification, and evaluation scripts remain in `scratch/`.
 
 ---
 

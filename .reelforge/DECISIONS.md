@@ -17,6 +17,7 @@
 7. [ADR-007: Laptop-Side Loopback OAuth / Server-Side Token Consumption](#adr-007-laptop-side-loopback-oauth--server-side-token-consumption)
 8. [ADR-008: Persistent Whisper Model Cache Decoupled from Scratch](#adr-008-persistent-whisper-model-cache-decoupled-from-scratch)
 9. [ADR-009: Disciplined Git Checkpoints (Commit ≠ Push)](#adr-009-disciplined-git-checkpoints-commit--push)
+10. [ADR-010: Managed OAuth Server Lifecycle & Cloud Remote Toggle](#adr-010-managed-oauth-server-lifecycle--cloud-remote-toggle)
 
 ---
 
@@ -118,3 +119,18 @@
   2. Local commits are recovery checkpoints created layer-by-layer after verification tests pass and human review is conducted.
   3. Pushing to remote repositories is a separate, deliberate operational step.
 - **Rationale**: Small logical local commits provide safe rollback points and prevent agents from losing days of progress, while maintaining human oversight over code merges.
+
+---
+
+### ADR-010: Managed OAuth Server Lifecycle & Cloud Remote Toggle
+
+- **Status**: Accepted & Implemented
+- **Date**: 2026-09-24 (V3.6 Layer 3 / V3.6.3)
+- **Context**: In V3.3, Microsoft OAuth required launching a standalone callback server (`python auth/oauth_server.py`) or relying on manual laptop-side processes. For headless cloud execution (Docker, VM, cloud PaaS), the bot service needs the ability to optionally run the OAuth callback gateway in-process without manual intervention, while retaining thread safety, clean shutdown, and backward compatibility.
+- **Decision**:
+  1. Add `OAUTH_BIND_HOST` (defaulting to `127.0.0.1` locally, set to `0.0.0.0` in cloud containers) and `REELFORGE_START_OAUTH_SERVER` (defaulting to `0`/off).
+  2. Embed singleton lifecycle helpers (`start_oauth_server()`, `stop_oauth_server()`, `get_oauth_server()`) protected by `threading.RLock()` within `auth/oauth_server.py`.
+  3. Wire asynchronous `_start_oauth_server_task` and `_stop_oauth_server_task` into `bot/telegram_bot.py` via `ApplicationBuilder.post_init` and `ApplicationBuilder.post_shutdown` hooks.
+  4. Keep the server off by default so standalone workers, CLI tools, and existing integration tests run without binding network ports unless explicitly requested.
+- **Rationale**: Enables zero-operator cloud runtime for the combined bot + OAuth server topology without blocking the Telegram async event loop or creating port binding conflicts in worker processes.
+- **Revisit When**: Architecture migrates to an external API gateway (e.g., Traefik/Nginx reverse proxy or serverless webhook endpoint) handling OAuth redirects.

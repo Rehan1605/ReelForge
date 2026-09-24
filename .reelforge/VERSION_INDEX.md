@@ -26,6 +26,7 @@
 | **V3.5** | Durable Job Queue & Worker Reliability | 2026-09-14 | Verified | Commit `d500583` | [`versions/V3.5.md`](versions/V3.5.md) |
 | **V3.6.1** | Storage Lifecycle Audit & Operations Doc | 2026-09-14 | Verified | Commit `d500583` | [`versions/V3.6.1.md`](versions/V3.6.1.md) |
 | **V3.6.2** | Worker Workspace Isolation | 2026-09-15 | Verified | Commit `d500583` | [`versions/V3.6.2.md`](versions/V3.6.2.md) |
+| **V3.6.3** | OAuth Cloud Lifecycle & Remote Binding | 2026-09-24 | In Progress (Uncommitted) | Working Tree (`c7e1263..HEAD`) | [`versions/V3.6.3.md`](versions/V3.6.3.md) |
 
 ---
 

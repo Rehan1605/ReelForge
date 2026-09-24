@@ -101,6 +101,15 @@ REELFORGE_EMBEDDED_WORKER = os.getenv("REELFORGE_EMBEDDED_WORKER", "1").strip().
     "0", "false", "no",
 )
 
+# Embedded OAuth callback server toggle.
+# Default OFF (0) for local development (standalone `python -m auth.oauth_server`).
+# Set to 1 / true / yes to enable the in-process OAuth callback server inside run_bot()
+# (ideal for single-container cloud deployment).
+REELFORGE_START_OAUTH_SERVER = os.getenv("REELFORGE_START_OAUTH_SERVER", "0").strip().lower() in (
+    "1", "true", "yes",
+)
+
+
 WHISPER_MODEL = os.getenv("WHISPER_MODEL", "base").strip()
 WHISPER_CACHE_DIR = os.getenv("WHISPER_CACHE_DIR", "").strip() or None
 

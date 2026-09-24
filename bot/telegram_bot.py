@@ -20,8 +20,14 @@ from telegram.ext import (
     filters,
 )
 
-from config import BOT_TOKEN, BRAINS_DIR, CATEGORIES, REELFORGE_EMBEDDED_WORKER
-from auth.oauth_server import start_oauth_for_user
+from config import (
+    BOT_TOKEN,
+    BRAINS_DIR,
+    CATEGORIES,
+    REELFORGE_EMBEDDED_WORKER,
+    REELFORGE_START_OAUTH_SERVER,
+)
+from auth.oauth_server import start_oauth_for_user, start_oauth_server, stop_oauth_server
 from onenote.sanitizer import sanitize_page_title
 from processing.pipeline import process_reel
 from processing.worker import worker_loop
@@ -1226,12 +1232,63 @@ def run_bot():
         if task is not None:
             task.cancel()
 
-    builder = ApplicationBuilder().token(BOT_TOKEN)
+    async def _start_oauth_server_task(_app):
+        import config
+        secret = getattr(config, "OAUTH_STATE_SECRET", "").strip()
+        if not secret:
+            print(
+                "OAuth callback server: disabled (OAUTH_STATE_SECRET not configured). "
+                "Set OAUTH_STATE_SECRET to enable Microsoft /connect callback."
+            )
+            return
+
+        try:
+            server = start_oauth_server()
+            _app.oauth_server = server
+            print(
+                f"OAuth callback server: listening on http://{server.host}:{server.port}{server.path}"
+            )
+        except Exception as e:
+            print(f"Warning: Could not start OAuth callback server: {e}")
+
+    async def _stop_oauth_server_task(_app):
+        try:
+            stop_oauth_server()
+            _app.oauth_server = None
+            print("OAuth callback server: stopped.")
+        except Exception as e:
+            print(f"Notice: error stopping OAuth callback server: {e}")
+
+    post_init_hooks = []
+    post_shutdown_hooks = []
+
     if REELFORGE_EMBEDDED_WORKER:
-        builder = builder.post_init(_start_job_worker).post_shutdown(_stop_job_worker)
+        post_init_hooks.append(_start_job_worker)
+        post_shutdown_hooks.append(_stop_job_worker)
         print("Embedded worker: ON (single-process mode). Set REELFORGE_EMBEDDED_WORKER=0 to run a standalone worker instead.")
     else:
         print("Embedded worker: OFF (standalone mode). Job processing handled by `python -m processing.worker`.")
+
+    if REELFORGE_START_OAUTH_SERVER:
+        post_init_hooks.append(_start_oauth_server_task)
+        post_shutdown_hooks.append(_stop_oauth_server_task)
+        print("Embedded OAuth server: ON (single-process mode). Set REELFORGE_START_OAUTH_SERVER=0 to run standalone.")
+    else:
+        print("Embedded OAuth server: OFF (standalone mode). Run via `python -m auth.oauth_server`.")
+
+    builder = ApplicationBuilder().token(BOT_TOKEN)
+
+    if post_init_hooks:
+        async def _on_post_init(app_instance):
+            for hook in post_init_hooks:
+                await hook(app_instance)
+
+        async def _on_post_shutdown(app_instance):
+            for hook in post_shutdown_hooks:
+                await hook(app_instance)
+
+        builder = builder.post_init(_on_post_init).post_shutdown(_on_post_shutdown)
+
     app = builder.build()
 
     # Register discovery & lifecycle commands

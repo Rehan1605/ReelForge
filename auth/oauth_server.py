@@ -37,6 +37,7 @@ from __future__ import annotations
 
 import html
 import threading
+import time
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit
@@ -425,6 +426,8 @@ def make_callback_handler(callback_path: str):
             if parsed.path != callback_path:
                 self.send_response(404)
                 self.send_header("Content-Type", "text/plain; charset=utf-8")
+                self.send_header("Content-Length", "9")
+                self.send_header("Connection", "close")
                 self.end_headers()
                 self.wfile.write(b"Not Found")
                 return
@@ -437,6 +440,7 @@ def make_callback_handler(callback_path: str):
             self.send_header("Content-Type", result["content_type"])
             self.send_header("Cache-Control", "no-store")
             self.send_header("Content-Length", str(len(body)))
+            self.send_header("Connection", "close")
             self.end_headers()
             self.wfile.write(body)
 
@@ -456,47 +460,57 @@ class OAuthCallbackServer:
     """
 
     def __init__(self, host: str | None = None, port: int | None = None, redirect_uri: str | None = None):
-        self.host = host or config.OAUTH_HOST
+        self._lock = threading.RLock()
+        self.host = host if host is not None else config.OAUTH_HOST
         self.port = port if port is not None else config.OAUTH_LISTEN_PORT
-        self.redirect_uri = redirect_uri or config.OAUTH_REDIRECT_URI
+        self.redirect_uri = redirect_uri if redirect_uri is not None else config.OAUTH_REDIRECT_URI
         self.path = _callback_path(self.redirect_uri)
         self._httpd: ThreadingHTTPServer | None = None
         self._thread: threading.Thread | None = None
 
     @property
     def is_running(self) -> bool:
-        return self._httpd is not None
+        with self._lock:
+            return self._httpd is not None
 
     @property
     def port(self) -> int:
         """Resolve the actual bound port (useful when initialized with 0)."""
-        if self._httpd is not None:
-            return int(self._httpd.server_address[1])
-        return self._port
+        with self._lock:
+            if self._httpd is not None:
+                return int(self._httpd.server_address[1])
+            return self._port
 
     @port.setter
     def port(self, value: int) -> None:
-        self._port = int(value)
+        with self._lock:
+            self._port = int(value)
 
     def start(self) -> "OAuthCallbackServer":
-        if self._httpd is not None:
+        with self._lock:
+            if self._httpd is not None:
+                return self
+            handler = make_callback_handler(self.path)
+            self._httpd = ThreadingHTTPServer((self.host, self._port), handler)
+            self._thread = threading.Thread(
+                target=self._httpd.serve_forever,
+                name="reelforge-oauth-callback",
+                daemon=True,
+            )
+            self._thread.start()
             return self
-        handler = make_callback_handler(self.path)
-        self._httpd = ThreadingHTTPServer((self.host, self.port), handler)
-        self._thread = threading.Thread(
-            target=self._httpd.serve_forever,
-            name="reelforge-oauth-callback",
-            daemon=True,
-        )
-        self._thread.start()
-        return self
 
     def stop(self) -> None:
-        if self._httpd is not None:
-            self._httpd.shutdown()
-            self._httpd.server_close()
-            self._httpd = None
-            self._thread = None
+        thread_to_join: threading.Thread | None = None
+        with self._lock:
+            if self._httpd is not None:
+                self._httpd.shutdown()
+                self._httpd.server_close()
+                self._httpd = None
+                thread_to_join = self._thread
+                self._thread = None
+        if thread_to_join is not None:
+            thread_to_join.join(timeout=2.0)
 
     def __enter__(self) -> "OAuthCallbackServer":
         return self.start()
@@ -505,21 +519,72 @@ class OAuthCallbackServer:
         self.stop()
 
 
+# ---------------------------------------------------------------------------
+# Global Server Lifecycle Management (idempotent & thread-safe)
+# ---------------------------------------------------------------------------
+
+_global_server: OAuthCallbackServer | None = None
+_global_server_lock = threading.RLock()
+
+
+def get_oauth_server() -> OAuthCallbackServer | None:
+    """Return the active global OAuth callback server, if one is running."""
+    with _global_server_lock:
+        if _global_server is not None and _global_server.is_running:
+            return _global_server
+        return None
+
+
+def start_oauth_server(
+    host: str | None = None,
+    port: int | None = None,
+    redirect_uri: str | None = None,
+) -> OAuthCallbackServer:
+    """
+    Start the global OAuth callback server if not already running.
+
+    Thread-safe and idempotent: if a server is already running, returns
+    the existing instance without creating a duplicate.
+    """
+    global _global_server
+    with _global_server_lock:
+        if _global_server is not None and _global_server.is_running:
+            return _global_server
+
+        server = OAuthCallbackServer(host=host, port=port, redirect_uri=redirect_uri)
+        server.start()
+        _global_server = server
+        return server
+
+
+def stop_oauth_server() -> None:
+    """
+    Stop the active global OAuth callback server and release resources.
+
+    Thread-safe and idempotent: safe to call if no server is running.
+    """
+    global _global_server
+    with _global_server_lock:
+        if _global_server is not None:
+            _global_server.stop()
+            _global_server = None
+
+
 def main() -> None:
     """Run the callback server in the foreground (e.g. `python -m auth.oauth_server`)."""
     require_state_secret()
-    server = OAuthCallbackServer().start()
+    server = start_oauth_server()
     print(
         f"OAuth callback server listening on http://{server.host}:{server.port}{server.path}\n"
         "Waiting for Microsoft redirects... (Ctrl+C to stop)"
     )
     try:
-        if server._httpd is not None:
-            server._httpd.serve_forever()
+        while server.is_running:
+            time.sleep(0.5)
     except KeyboardInterrupt:
         print("\nStopping OAuth callback server.")
     finally:
-        server.stop()
+        stop_oauth_server()
 
 
 if __name__ == "__main__":

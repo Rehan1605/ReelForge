@@ -7,62 +7,65 @@
 
 ## 1. Task Metadata
 
-- **Task Name**: ReelForge V3.6 — Tracked V3 Regression Test Suite Migration
-- **Status**: `TEST_SUITE_MIGRATED_AND_VERIFIED`
-- **Current Version**: V3.6 (Layer 2)
-- **Last Commit**: `c7e1263` (*docs(reelforge): finalize V3.6 project state reconciliation*)
-- **Primary Test File**: `tests/test_v36_layer2_workspace.py`
-- **Secondary Test File**: `tests/test_v36_layer1_storage_audit.py`
+- **Task Name**: ReelForge V3.6 — Managed OAuth Callback Server Lifecycle & Cloud Configuration (Task 1 of Cloud Deployment Milestone)
+- **Status**: `OAUTH_LIFECYCLE_IMPLEMENTED_AND_VERIFIED`
+- **Current Version**: V3.6 (Layer 3 / V3.6.3)
+- **Last Commit**: `ce33ca5` (*test(v3.6): establish tracked V3 regression test suite*)
+- **Primary Test File**: `tests/test_v36_oauth_lifecycle.py` (14/14 tests pass)
+- **Secondary Test File**: `tests/test_v34_worker_contract.py` (9/9 tests pass)
 - **Last Verification Timestamp**: 2026-09-24
 
 ---
 
 ## 2. Objective
 
-Establish a version-controlled `tests/` directory containing the complete active V3 regression test suite (11 suites, 244 tests), preserving complete coverage, adjusting import paths for tests, and removing duplicate test files from Git-ignored `scratch/`.
+Prepare the existing Microsoft OAuth callback server for cloud deployment:
+1. Make OAuth bind host (`OAUTH_HOST`) and in-process startup toggle (`REELFORGE_START_OAUTH_SERVER`) configurable.
+2. Ensure thread-safe, idempotent lifecycle management (`start_oauth_server`, `stop_oauth_server`, `get_oauth_server`).
+3. Integrate callback server start and stop cleanly into the Telegram bot application lifecycle (`run_bot` hooks) without blocking polling.
+4. Prevent duplicate callback servers and port collisions.
+5. Preserve local development compatibility (defaulting embedded server to off).
+6. Verify against 100% regression suite pass (258/258 tests passing).
 
 ---
 
 ## 3. Scope & File Boundaries
 
+### Modified Application Code:
+- `config.py`: Added `REELFORGE_START_OAUTH_SERVER` toggle (defaults to `False`).
+- `auth/oauth_server.py`: Thread-safe `OAuthCallbackServer` with `RLock`, `stop()` joining daemon thread, HTTP connection termination headers, and global singleton lifecycle management (`start_oauth_server`, `stop_oauth_server`, `get_oauth_server`).
+- `bot/telegram_bot.py`: Hooked `_start_oauth_server_task` and `_stop_oauth_server_task` into `post_init` and `post_shutdown`.
+- `WORKER.env.example`: Documented `REELFORGE_START_OAUTH_SERVER=`.
+
 ### Tracked Test Suite (`tests/`):
-- `tests/__init__.py`
-- `tests/test_v34_ai_gateway.py` (12 tests)
-- `tests/test_v34_media_storage.py` (13 tests)
-- `tests/test_v34_portability.py` (13 tests)
-- `tests/test_v34_worker_contract.py` (9 tests)
-- `tests/test_v35_layer1_jobs.py` (24 tests)
-- `tests/test_v35_layer2.py` (20 tests)
-- `tests/test_v35_layer3.py` (30 tests)
-- `tests/test_v35_layer4.py` (22 tests)
-- `tests/test_v35_layer5.py` (23 tests)
-- `tests/test_v36_layer1_storage_audit.py` (19 tests)
-- `tests/test_v36_layer2_workspace.py` (59 tests)
-
-### Scratch Directory (`scratch/`):
-- Exploratory scripts, manual live-connection scripts (`test_v3_*.py`), and candidate audit dumps remain preserved in `scratch/`.
-- Duplicate migrated test files removed from `scratch/`.
-
-### Application Code:
-- Strictly frozen; 0 uncommitted application code changes.
+- `tests/test_v36_oauth_lifecycle.py` (14 tests - NEW)
+- Total 12 active V3 test suites (258 tests).
 
 ---
 
 ## 4. Current Implementation State
 
-1. **Test Suite Migration**:
-   - 11 V3 test suites migrated into tracked `tests/`.
-   - Internal cross-test imports updated (`from scratch.test_v35_*` → `from tests.test_v35_*`).
+1. **OAuth Lifecycle & Configuration**:
+   - `OAuthCallbackServer` is re-entrant thread-safe via `threading.RLock()`.
+   - Global singleton prevents duplicate server creation and port collisions.
+   - `bot.telegram_bot.run_bot()` safely manages OAuth server lifecycle when `REELFORGE_START_OAUTH_SERVER=1`.
+   - Missing `OAUTH_STATE_SECRET` or port collisions are handled gracefully with logged warnings/notices without halting the bot.
 2. **Application Test Health**:
-   - 59/59 workspace isolation tests pass from `tests/test_v36_layer2_workspace.py`.
-   - 19/19 storage audit tests pass from `tests/test_v36_layer1_storage_audit.py`.
-   - 244/244 V3 suite tests pass via `python -m unittest discover -s tests -p "test_v3*.py"` (100% pass rate).
+   - 14/14 OAuth lifecycle tests pass from `tests/test_v36_oauth_lifecycle.py`.
+   - 258/258 V3 suite tests pass via `python -m unittest discover -s tests -p "test_v3*.py"` (100% pass rate in 5.15s).
 
 ---
 
-## 5. Next Pending Actions
+## 5. Remaining Cloud Deployment Blockers & Next Actions
 
-1. **Human Approval for Commit**:
-   - Commit the new tracked test suite and documentation updates (`test(v3.6): establish tracked V3 regression test suite`).
-2. **Next Development Objective (Human Approval)**:
-   - Await user approval and specification for the next development layer or milestone. Do NOT assume, fabricate, or begin new layers without explicit authorization.
+1. **Public HTTPS Reverse Proxy / Ingress**:
+   - Microsoft Azure Entra ID requires an HTTPS redirect URI for non-loopback clients.
+   - A reverse proxy (e.g. Caddy, Nginx, or Cloudflare Tunnel) terminating port 443 and proxying to port 8080 must be deployed, and the public URL set in `OAUTH_REDIRECT_URI` and Azure App Registration.
+2. **Remote Vision / LLM Endpoint**:
+   - Configure `OMNIROUTE_BASE_URL` and `OMNIROUTE_API_KEY` pointing to a remote OpenAI-compatible vision model rather than `http://localhost:20128/v1`.
+3. **Instagram Cloud Datacenter Ingestion**:
+   - Validate unauthenticated `yt-dlp` from target cloud provider IPs; configure cookie mounting if Instagram challenges datacenter ASNs.
+4. **Container Orchestration**:
+   - Create `docker-compose.yml` to orchestrate bot, worker, environment secrets, and persistent volume mounts (`WHISPER_CACHE_DIR`).
+5. **Human Approval for Commit**:
+   - Await human review and direction before staging, committing, or pushing.
