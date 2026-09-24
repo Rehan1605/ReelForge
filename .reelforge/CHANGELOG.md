@@ -4,6 +4,15 @@
 
 ---
 
+## [V3.6 Test Suite Migration] - 2026-09-24
+### Added
+- Tracked regression test suite in `tests/` containing all 11 active V3 test suites (244 tests, 100% passing).
+- `tests/__init__.py` packaging test suite for direct execution and discovery.
+### Removed
+- Removed duplicate test files from Git-ignored `scratch/`.
+
+---
+
 ## [Checkpoint 2] - 2026-09-23
 ### Added
 - Permanent ReelForge Project Brain infrastructure in `.reelforge/`: `PROJECT_STATE.md`, `ACTIVE_TASK.md`, `ARCHITECTURE.md`, `DECISIONS.md` (ADRs 001–009), `AGENT_PROTOCOL.md`, `CHANGELOG.md`, `VERSION_INDEX.md`, and 15 continuous version records in `versions/`.
@@ -17,7 +26,7 @@
 ### Added
 - Worker Workspace Isolation (`processing/worker_workspace.py`): Ephemeral private directory `WORKSPACE_DIR/workers/w-<pid>-<hex>/` per standalone worker process.
 - Dynamic workspace resolution via `effective_workspace()` across downloader, transcriber, vision analyzer, and cleanup.
-- Dedicated unit test suite `scratch/test_v36_layer2_workspace.py` (59 tests, 100% passing; local file in git-ignored `scratch/`).
+- Dedicated unit test suite `tests/test_v36_layer2_workspace.py` (59 tests, 100% passing).
 ### Changed
 - Exact reel ID cleanup matching (`<reel_id>.*`) to prevent numeric prefix collisions (e.g. `123` deleting `1234.mp4`).
 ### Commit
@@ -28,7 +37,7 @@
 ## [V3.6.1] - 2026-09-14
 ### Added
 - Storage Lifecycle Audit & Operations Contract (`WORKER_OPERATIONS.md` and `WORKER.env.example`).
-- Comprehensive storage verification test suite `scratch/test_v36_layer1_storage_audit.py` (19 tests, 100% passing).
+- Comprehensive storage verification test suite `tests/test_v36_layer1_storage_audit.py` (19 tests, 100% passing).
 ### Commit
 - `d500583`
 

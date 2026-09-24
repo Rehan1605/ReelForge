@@ -18,8 +18,8 @@ The system has completed **V3.6 Layer 2** of the V3 multi-tenant and cloud worke
 - V3.1 through V3.3 were previously committed (`68a5084`, `7241185`, `87739d9`, `d8bebfe`).
 - V3.4 (Cloud Portability), V3.5 (Durable Jobs & Worker Reliability), V3.6.1 (Storage Audit), and V3.6.2 (Worker Workspace Isolation) have been implemented, tested, and committed in Checkpoint 1 (`d500583`).
 - Checkpoint 2 established the permanent Project Brain (`.reelforge/` and `AGENTS.md`) in commit `7b40d35`, which is pushed and synchronized with `origin/main`.
-- All 244 V3 unit and integration tests pass (100% pass rate). *Note: Test suites reside in `scratch/`, which is Git-ignored; tests are verified locally on disk but not yet tracked in Git history.*
-- Application code is completely clean and untouched. Exactly four documentation files in `.reelforge/` are currently modified, unstaged, and uncommitted for state reconciliation.
+- All 244 V3 unit and integration tests are tracked in `tests/` and pass (100% pass rate).
+- Application code is completely clean and untouched.
 
 ---
 
@@ -40,30 +40,30 @@ The distinction between **Committed**, **Implemented**, **Tested**, **Verified**
 | **V3.2** | Multi-User Brain Object Ownership | Verified | Committed (`7241185`) | `storage/brain_object.py`, `scratch/test_v3_ownership.py` |
 | **V3.2.1** | MongoDB Ownership Index Hotfix | Verified | Committed (`87739d9`) | Index fix in `storage/db.py`, self-healing |
 | **V3.3** | Per-User Microsoft OAuth & OneNote Writer | Verified | Committed (`87739d9`, `d8bebfe`) | `auth/oauth_server.py`, `scratch/test_v3_oauth_flow.py`, `scratch/test_v3_onenote_user.py` |
-| **V3.4** | Cloud Portability & Runtime Independence | Verified | Committed (`d500583`) | Layers 1–4: `config.py` ROOT_DIR, system PATH ffmpeg, remote OmniRoute; tests: `scratch/test_v34_*.py` (pass) |
-| **V3.5** | Durable Job Queue & Worker Reliability | Verified | Committed (`d500583`) | Layers 1–5: `storage/job.py`, `storage/publication.py`, `processing/worker.py`, `bot/notifier.py`; tests: `scratch/test_v35_layer*.py` (pass) |
-| **V3.6.1** | Storage Lifecycle Audit & Operations Doc | Verified | Committed (`d500583`) | `WORKER_OPERATIONS.md`, `scratch/test_v36_layer1_storage_audit.py` (19/19 pass, local test) |
-| **V3.6.2** | Worker Workspace Isolation | Verified | Committed (`d500583`) | `processing/worker_workspace.py`, pipeline routing; `scratch/test_v36_layer2_workspace.py` (59/59 pass, local test) |
+| **V3.4** | Cloud Portability & Runtime Independence | Verified | Committed (`d500583`) | Layers 1–4: `config.py` ROOT_DIR, system PATH ffmpeg, remote OmniRoute; tests: `tests/test_v34_*.py` (pass) |
+| **V3.5** | Durable Job Queue & Worker Reliability | Verified | Committed (`d500583`) | Layers 1–5: `storage/job.py`, `storage/publication.py`, `processing/worker.py`, `bot/notifier.py`; tests: `tests/test_v35_layer*.py` (pass) |
+| **V3.6.1** | Storage Lifecycle Audit & Operations Doc | Verified | Committed (`d500583`) | `WORKER_OPERATIONS.md`, `tests/test_v36_layer1_storage_audit.py` (19/19 pass) |
+| **V3.6.2** | Worker Workspace Isolation | Verified | Committed (`d500583`) | `processing/worker_workspace.py`, pipeline routing; `tests/test_v36_layer2_workspace.py` (59/59 pass) |
 
 ---
 
 ## 3. Working Tree & Git Status
 
 Current Git Status on branch `main`:
-- **Last Committed Checkpoint**: `7b40d35` (*docs(reelforge): establish permanent project brain and agent protocol*), clean and synchronized with `origin/main` (0 commits ahead, 0 commits behind) at the time of the audit.
-- **Current Working Tree State**: Application code is 100% clean and untouched. Exactly four documentation files in `.reelforge/` (`ACTIVE_TASK.md`, `PROJECT_STATE.md`, `versions/V3.6.2.md`, `CHANGELOG.md`) are modified, unstaged, and uncommitted pending human review.
+- **Last Committed Checkpoint**: `c7e1263` (*docs(reelforge): finalize V3.6 project state reconciliation*).
+- **Current Working Tree State**: Application code is 100% clean and untouched. The `tests/` directory is established containing the tracked V3 test suite (11 suites, 244 tests).
 
 ---
 
 ## 4. Test Verification Summary
 
-All test suites re-verified on 2026-09-24:
-- **V3.6 Layer 2 Workspace Isolation**: `scratch/test_v36_layer2_workspace.py` — **59/59 PASSED** (0 failures, 0 errors in 2.77s).
-- **V3.6 Layer 1 Storage Lifecycle Audit**: `scratch/test_v36_layer1_storage_audit.py` — **19/19 PASSED** (0 failures, 0 errors in 0.80s).
-- **Full V3 Test Suite**: `python -m unittest discover -s scratch -p "test_v3*.py"` — **244/244 PASSED** (0 failures, 0 errors in 1.98s).
+All test suites verified from tracked `tests/` on 2026-09-24:
+- **V3.6 Layer 2 Workspace Isolation**: `tests/test_v36_layer2_workspace.py` — **59/59 PASSED** (0 failures, 0 errors in 0.75s).
+- **V3.6 Layer 1 Storage Lifecycle Audit**: `tests/test_v36_layer1_storage_audit.py` — **19/19 PASSED** (0 failures, 0 errors in 0.68s).
+- **Full V3 Test Suite**: `python -m unittest discover -s tests -p "test_v3*.py"` — **244/244 PASSED** (0 failures, 0 errors in 1.58s).
 
-> **Important Notice on Test Tracking**:
-> All test suites currently live in the `scratch/` directory, which is excluded from Git via `.gitignore` (line 13). Therefore, all 244 tests run and pass on the local environment, but are not tracked in Git version control. Migration of tests to a tracked directory (e.g. `tests/`) is flagged as a pending user decision.
+> **Test Tracking Status**:
+> The complete active V3 regression test suite (11 test files, 244 tests) is now tracked in version control under `tests/`. Exploratory, manual verification, and evaluation scripts remain in `scratch/`.
 
 ---
 
