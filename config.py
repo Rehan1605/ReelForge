@@ -83,6 +83,10 @@ VISION_MODEL = os.getenv("VISION_MODEL", "llama3.2-vision:latest")
 OMNIROUTE_BASE_URL = (os.getenv("OMNIROUTE_BASE_URL") or os.getenv("OPENAI_BASE_URL") or "http://localhost:20128/v1")
 # Remote gateways may require an API key; keys come only from the environment.
 OMNIROUTE_API_KEY = (os.getenv("OMNIROUTE_API_KEY") or os.getenv("OPENAI_API_KEY") or "").strip()
+# Optional dedicated vision gateway overrides.
+# If unset, vision analysis falls back to OMNIROUTE_BASE_URL and OMNIROUTE_API_KEY.
+VISION_BASE_URL = os.getenv("VISION_BASE_URL", "").strip()
+VISION_API_KEY = os.getenv("VISION_API_KEY", "").strip()
 VISION_MAX_FRAMES = int(os.getenv("VISION_MAX_FRAMES", "8"))
 
 WORKSPACE_DIR = os.getenv("WORKSPACE_DIR", str(ROOT_DIR / "reels")).strip()

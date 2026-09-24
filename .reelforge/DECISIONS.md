@@ -18,6 +18,7 @@
 8. [ADR-008: Persistent Whisper Model Cache Decoupled from Scratch](#adr-008-persistent-whisper-model-cache-decoupled-from-scratch)
 9. [ADR-009: Disciplined Git Checkpoints (Commit ≠ Push)](#adr-009-disciplined-git-checkpoints-commit--push)
 10. [ADR-010: Managed OAuth Server Lifecycle & Cloud Remote Toggle](#adr-010-managed-oauth-server-lifecycle--cloud-remote-toggle)
+11. [ADR-011: Dedicated Remote Vision Gateway Routing & Preflight Verification](#adr-011-dedicated-remote-vision-gateway-routing--preflight-verification)
 
 ---
 
@@ -134,3 +135,17 @@
   4. Keep the server off by default so standalone workers, CLI tools, and existing integration tests run without binding network ports unless explicitly requested.
 - **Rationale**: Enables zero-operator cloud runtime for the combined bot + OAuth server topology without blocking the Telegram async event loop or creating port binding conflicts in worker processes.
 - **Revisit When**: Architecture migrates to an external API gateway (e.g., Traefik/Nginx reverse proxy or serverless webhook endpoint) handling OAuth redirects.
+
+---
+
+### ADR-011: Dedicated Remote Vision Gateway Routing & Preflight Verification
+
+- **Status**: Accepted & Implemented
+- **Date**: 2026-09-24 (V3.6 Layer 3 / V3.6.4)
+- **Context**: In V2.3/V3.4, text generation, domain extraction, evaluation, and vision analysis shared `OMNIROUTE_BASE_URL`. In cloud deployments, multimodal vision inference often requires dedicated hosting or different provider infrastructure (e.g. OpenAI, OpenRouter, cloud vLLM, Google Gemini) compared to standard text extraction LLMs.
+- **Decision**:
+  1. Introduce `VISION_BASE_URL` and `VISION_API_KEY` in `config.py` as optional dedicated overrides for vision analysis, defaulting to empty strings so they fall back to `OMNIROUTE_BASE_URL` and `OMNIROUTE_API_KEY`.
+  2. Implement URL endpoint normalization in `processing/vision_analyzer.py` (`.rstrip("/")` and detecting existing `/chat/completions`) to prevent broken path concatenations.
+  3. Provide a lightweight preflight probe `check_vision_gateway()` accessible via CLI (`--check-gateway`) to verify remote connectivity and authentication without expensive video processing or frame extraction.
+- **Rationale**: Allows operators to decouple vision model infrastructure from text LLMs with zero code changes, while providing immediate operational observability when configuring cloud workers.
+- **Revisit When**: Moving to a unified API gateway orchestration layer that abstracts multimodal routing behind a single endpoint.

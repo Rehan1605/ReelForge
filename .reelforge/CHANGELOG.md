@@ -4,6 +4,16 @@
 
 ---
 
+## [V3.6.4 Remote AI Vision Connectivity] - 2026-09-24
+### Added
+- Dedicated vision gateway configuration overrides in `config.py`: `VISION_BASE_URL` and `VISION_API_KEY` with seamless fallback to `OMNIROUTE_BASE_URL` and `OMNIROUTE_API_KEY`.
+- Documentation in `WORKER.env.example` and secret contract tracking in `tests/test_v34_worker_contract.py`.
+- URL endpoint normalization in `processing/vision_analyzer.py` handling trailing slashes and preventing duplicate `/chat/completions`.
+- Preflight gateway connectivity probe `check_vision_gateway()` and CLI options `--check-gateway` and `--api-key`.
+- Tracked regression test suite `tests/test_v36_vision_remote.py` (14 tests, 100% passing; total 272 tests).
+
+---
+
 ## [V3.6.3 OAuth Cloud Lifecycle] - 2026-09-24
 ### Added
 - Managed OAuth callback server lifecycle helpers in `auth/oauth_server.py`: `start_oauth_server()`, `stop_oauth_server()`, and `get_oauth_server()` with `threading.RLock()` thread safety and singleton idempotency.

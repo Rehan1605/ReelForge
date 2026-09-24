@@ -1,10 +1,10 @@
 # ReelForge Project State — Single Source of Truth
 
 > **Current as of**: 2026-09-24
-> **Branch**: `main` (last commit `ce33ca5`, ahead of `origin/main` by 2 commits)
+> **Branch**: `main` (last commit `4064789`, ahead of `origin/main` by 3 commits)
 > **Current Version**: V3.6
-> **Current Layer**: Layer 3 (Managed OAuth Callback Server Lifecycle & Cloud Configuration)
-> **Layer Status**: IMPLEMENTED & VERIFIED (Tests: 258/258 passing)
+> **Current Layer**: Layer 3 (Remote AI Vision Connectivity & Cloud Readiness)
+> **Layer Status**: IMPLEMENTED & VERIFIED (Tests: 272/272 passing)
 
 ---
 
@@ -17,9 +17,10 @@ ReelForge is an automated Instagram reel knowledge extraction and personal intel
 The system is actively progressing through the **Cloud Runtime Deployment** milestone:
 - V3.1 through V3.3 were previously committed (`68a5084`, `7241185`, `87739d9`, `d8bebfe`).
 - V3.4 (Cloud Portability), V3.5 (Durable Jobs & Worker Reliability), V3.6.1 (Storage Audit), and V3.6.2 (Worker Workspace Isolation) were committed in `d500583`.
-- V3.6 test suite was migrated to tracked `tests/` in commit `ce33ca5` (244 tests).
-- V3.6.3 implements production-manageable OAuth callback server configuration (`OAUTH_HOST`, `REELFORGE_START_OAUTH_SERVER`), thread-safe `RLock` lifecycle management (`start_oauth_server`, `stop_oauth_server`), and Telegram bot hook integration (`_on_post_init`, `_on_post_shutdown`).
-- All 258 V3 unit and integration tests are tracked in `tests/` and pass (100% pass rate).
+- V3.6 test suite was migrated to tracked `tests/` in commit `7b40d35` (244 tests).
+- V3.6.3 implemented managed OAuth callback server lifecycle and cloud binding (`4064789`, 14 tests, total 258).
+- V3.6.4 implements remote vision connectivity overrides (`VISION_BASE_URL`, `VISION_API_KEY`), URL normalization, preflight connectivity probing (`check_vision_gateway`), and test suite expansion (`tests/test_v36_vision_remote.py`, 14 tests).
+- All 272 V3 unit and integration tests are tracked in `tests/` and pass (100% pass rate).
 
 ---
 
@@ -44,25 +45,27 @@ The distinction between **Committed**, **Implemented**, **Tested**, **Verified**
 | **V3.5** | Durable Job Queue & Worker Reliability | Verified | Committed (`d500583`) | Layers 1–5: `storage/job.py`, `storage/publication.py`, `processing/worker.py`, `bot/notifier.py`; tests: `tests/test_v35_layer*.py` (pass) |
 | **V3.6.1** | Storage Lifecycle Audit & Operations Doc | Verified | Committed (`d500583`) | `WORKER_OPERATIONS.md`, `tests/test_v36_layer1_storage_audit.py` (19/19 pass) |
 | **V3.6.2** | Worker Workspace Isolation | Verified | Committed (`d500583`) | `processing/worker_workspace.py`, pipeline routing; `tests/test_v36_layer2_workspace.py` (59/59 pass) |
-| **V3.6.3** | Managed OAuth Lifecycle & Cloud Configuration | Verified | Implemented (Working Tree) | `auth/oauth_server.py`, `bot/telegram_bot.py`, `config.py`; `tests/test_v36_oauth_lifecycle.py` (14/14 pass) |
+| **V3.6.3** | Managed OAuth Lifecycle & Cloud Configuration | Verified | Committed (`4064789`) | `auth/oauth_server.py`, `bot/telegram_bot.py`, `config.py`; `tests/test_v36_oauth_lifecycle.py` (14/14 pass) |
+| **V3.6.4** | Remote AI Vision Connectivity & Cloud Readiness | Verified | Implemented (Working Tree) | `config.py`, `processing/vision_analyzer.py`, `WORKER.env.example`; `tests/test_v36_vision_remote.py` (14/14 pass) |
 
 ---
 
 ## 3. Working Tree & Git Status
 
 Current Git Status on branch `main`:
-- **Last Committed Checkpoint**: `ce33ca5` (*test(v3.6): establish tracked V3 regression test suite*).
-- **Current Working Tree State**: Working tree contains V3.6.3 OAuth lifecycle changes and new test suite `tests/test_v36_oauth_lifecycle.py`. 258/258 tests pass.
+- **Last Committed Checkpoint**: `4064789` (*feat: add cloud-ready Microsoft OAuth server lifecycle (V3.6.3)*).
+- **Current Working Tree State**: Working tree contains V3.6.4 Remote AI Vision connectivity enhancements and test suite `tests/test_v36_vision_remote.py`. 272/272 tests pass.
 
 ---
 
 ## 4. Test Verification Summary
 
 All test suites verified from tracked `tests/` on 2026-09-24:
+- **V3.6 Layer 3 Remote AI Vision Connectivity**: `tests/test_v36_vision_remote.py` — **14/14 PASSED** (0 failures, 0 errors in 0.005s).
 - **V3.6 Layer 3 Managed OAuth Lifecycle**: `tests/test_v36_oauth_lifecycle.py` — **14/14 PASSED** (0 failures, 0 errors in 3.62s).
 - **V3.6 Layer 2 Workspace Isolation**: `tests/test_v36_layer2_workspace.py` — **59/59 PASSED** (0 failures, 0 errors in 0.75s).
 - **V3.6 Layer 1 Storage Lifecycle Audit**: `tests/test_v36_layer1_storage_audit.py` — **19/19 PASSED** (0 failures, 0 errors in 0.68s).
-- **Full V3 Test Suite**: `python -m unittest discover -s tests -p "test_v3*.py"` — **258/258 PASSED** (0 failures, 0 errors in 5.15s).
+- **Full V3 Test Suite**: `python -m unittest discover -s tests -p "test_v3*.py"` — **272/272 PASSED** (0 failures, 0 errors in 5.35s).
 
 > **Test Tracking Status**:
 > The complete active V3 regression test suite (12 test files, 258 tests) is tracked in version control under `tests/`. Exploratory, manual verification, and evaluation scripts remain in `scratch/`.

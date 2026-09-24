@@ -18,6 +18,8 @@ from config import (
     OMNIROUTE_API_KEY,
     OMNIROUTE_BASE_URL,
     PROMPTS_DIR,
+    VISION_API_KEY,
+    VISION_BASE_URL,
     VISION_MAX_FRAMES,
     VISION_MODEL,
 )
@@ -265,10 +267,13 @@ def call_vision_model(
     Call an OpenAI-compatible chat-completions endpoint with prompt and base64 image frames.
     """
     target_model = model or VISION_MODEL
-    target_base_url = (base_url or OMNIROUTE_BASE_URL).rstrip("/")
-    target_api_key = api_key if api_key is not None else OMNIROUTE_API_KEY
+    target_base_url = (base_url or VISION_BASE_URL or OMNIROUTE_BASE_URL).rstrip("/")
+    target_api_key = api_key if api_key is not None else (VISION_API_KEY or OMNIROUTE_API_KEY)
 
-    endpoint = f"{target_base_url}/chat/completions"
+    if target_base_url.endswith("/chat/completions"):
+        endpoint = target_base_url
+    else:
+        endpoint = f"{target_base_url}/chat/completions"
 
     # Construct user content items
     user_content: list[dict] = [
@@ -621,6 +626,59 @@ def test_sampling(
             print("Temporary sampling test directory cleaned up.")
 
 
+def check_vision_gateway(
+    base_url: str | None = None,
+    api_key: str | None = None,
+    timeout: int = 10,
+) -> tuple[bool, str]:
+    """
+    Check connectivity and authentication with the configured OpenAI-compatible vision gateway.
+    Performs a lightweight probe to verify connectivity and API key validity without
+    requiring video frames or heavyweight model inference.
+    Returns (ok: bool, message: str).
+    """
+    target_base_url = (base_url or VISION_BASE_URL or OMNIROUTE_BASE_URL).rstrip("/")
+    if target_base_url.endswith("/chat/completions"):
+        base = target_base_url[:-len("/chat/completions")]
+    else:
+        base = target_base_url
+
+    target_api_key = api_key if api_key is not None else (VISION_API_KEY or OMNIROUTE_API_KEY)
+
+    headers = {}
+    if target_api_key:
+        headers["Authorization"] = f"Bearer {target_api_key}"
+
+    models_endpoint = f"{base}/models"
+    try:
+        resp = requests.get(models_endpoint, headers=headers, timeout=timeout)
+        if resp.status_code == 200:
+            return True, f"Vision gateway reachable at {models_endpoint} (HTTP 200)"
+        elif resp.status_code in (401, 403):
+            return False, f"Vision gateway reachable at {models_endpoint} but authentication failed (HTTP {resp.status_code})"
+        elif resp.status_code == 404:
+            # Fallback probe to /chat/completions for gateways that omit /models
+            chat_endpoint = f"{target_base_url if target_base_url.endswith('/chat/completions') else f'{target_base_url}/chat/completions'}"
+            post_resp = requests.post(
+                chat_endpoint,
+                headers={"Content-Type": "application/json", **headers},
+                json={"model": VISION_MODEL, "messages": [{"role": "user", "content": "ping"}], "max_tokens": 1},
+                timeout=timeout,
+            )
+            if post_resp.status_code in (200, 400):
+                return True, f"Vision gateway reachable at {chat_endpoint} (HTTP {post_resp.status_code})"
+            elif post_resp.status_code in (401, 403):
+                return False, f"Vision gateway reachable at {chat_endpoint} but authentication failed (HTTP {post_resp.status_code})"
+            return False, f"Vision gateway at {chat_endpoint} returned HTTP {post_resp.status_code}"
+        return False, f"Vision gateway returned HTTP {resp.status_code}"
+    except requests.exceptions.ConnectionError as e:
+        return False, f"Connection refused or unreachable: {target_base_url} ({e})"
+    except requests.exceptions.Timeout:
+        return False, f"Connection timed out after {timeout}s: {target_base_url}"
+    except Exception as e:
+        return False, f"Vision gateway check failed: {e}"
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="ReelForge V2.1 Visual Analyzer CLI"
@@ -652,7 +710,18 @@ if __name__ == "__main__":
         "--base-url",
         type=str,
         default=None,
-        help=f"OpenAI-compatible base URL (default: {OMNIROUTE_BASE_URL})",
+        help=f"OpenAI-compatible base URL (default: {VISION_BASE_URL or OMNIROUTE_BASE_URL})",
+    )
+    parser.add_argument(
+        "--api-key",
+        type=str,
+        default=None,
+        help="Optional API key for the vision gateway",
+    )
+    parser.add_argument(
+        "--check-gateway",
+        action="store_true",
+        help="Check connectivity and authentication to the configured vision gateway",
     )
     parser.add_argument(
         "--no-update-brain",
@@ -663,6 +732,15 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     try:
+        if args.check_gateway:
+            ok, msg = check_vision_gateway(base_url=args.base_url, api_key=args.api_key)
+            if ok:
+                print(f"✅ {msg}")
+                sys.exit(0)
+            else:
+                print(f"❌ {msg}", file=sys.stderr)
+                sys.exit(1)
+
         if args.sample_only:
             test_sampling(video_path=args.video, max_frames=args.max_frames)
             sys.exit(0)
@@ -672,6 +750,7 @@ if __name__ == "__main__":
             max_frames=args.max_frames,
             model=args.model,
             base_url=args.base_url,
+            api_key=args.api_key,
         )
 
         print("\n=== VISUAL ANALYSIS RESULT ===")
