@@ -4,15 +4,24 @@
 
 ---
 
+## [Checkpoint 2] - 2026-09-23
+### Added
+- Permanent ReelForge Project Brain infrastructure in `.reelforge/`: `PROJECT_STATE.md`, `ACTIVE_TASK.md`, `ARCHITECTURE.md`, `DECISIONS.md` (ADRs 001–009), `AGENT_PROTOCOL.md`, `CHANGELOG.md`, `VERSION_INDEX.md`, and 15 continuous version records in `versions/`.
+- Root entrypoint `AGENTS.md` establishing mandatory operating rules and Git checkpoint workflow for AI agents.
+### Commit
+- `7b40d35` (pushed to `origin/main`)
+
+---
+
 ## [V3.6.2] - 2026-09-15
 ### Added
 - Worker Workspace Isolation (`processing/worker_workspace.py`): Ephemeral private directory `WORKSPACE_DIR/workers/w-<pid>-<hex>/` per standalone worker process.
 - Dynamic workspace resolution via `effective_workspace()` across downloader, transcriber, vision analyzer, and cleanup.
-- Dedicated unit test suite `scratch/test_v36_layer2_workspace.py` (59 tests, 100% passing).
+- Dedicated unit test suite `scratch/test_v36_layer2_workspace.py` (59 tests, 100% passing; local file in git-ignored `scratch/`).
 ### Changed
 - Exact reel ID cleanup matching (`<reel_id>.*`) to prevent numeric prefix collisions (e.g. `123` deleting `1234.mp4`).
 ### Commit
-- `d500583`
+- `d500583` (pushed to `origin/main`)
 
 ---
 
