@@ -39,6 +39,8 @@ class TestTermuxDnsConfiguration(unittest.TestCase):
 
     def test_android_termux_detection_uses_platform_and_prefix(self):
         self.assertTrue(db._is_android_termux())
+        with mock.patch.object(sys, "platform", "android"):
+            self.assertTrue(db._is_android_termux())
         with mock.patch.object(sys, "platform", "darwin"):
             self.assertFalse(db._is_android_termux())
         with mock.patch.object(sys, "platform", "win32"):
@@ -62,6 +64,63 @@ class TestTermuxDnsConfiguration(unittest.TestCase):
             db._parse_termux_nameservers(contents),
             ["1.1.1.1", "2001:4860:4860::8888"],
         )
+
+    def test_phone_resolver_file_path_parses_exact_ipv4_entries(self):
+        file_path = Path(TERMUX_PREFIX) / "etc" / "resolv.conf"
+        with mock.patch.object(Path, "is_file", return_value=True):
+            with mock.patch.object(
+                Path,
+                "read_text",
+                return_value="nameserver 8.8.8.8\nnameserver 8.8.4.4\n",
+            ):
+                self.assertEqual(
+                    db._parse_termux_nameservers(str(file_path)),
+                    ["8.8.8.8", "8.8.4.4"],
+                )
+
+    def test_android_platform_configures_resolver_from_phone_contents(self):
+        resolver = mock.Mock()
+        phone_resolver_contents = "nameserver 8.8.8.8\nnameserver 8.8.4.4\n"
+        with mock.patch.object(sys, "platform", "android"):
+            with mock.patch.object(
+                db.Path,
+                "read_text",
+                return_value=phone_resolver_contents,
+                autospec=True,
+            ):
+                with mock.patch.object(
+                    dns.resolver,
+                    "Resolver",
+                    return_value=resolver,
+                ) as resolver_factory:
+                    db._configure_termux_dns()
+
+        resolver_factory.assert_called_once_with(configure=False)
+        self.assertEqual(resolver.nameservers, ["8.8.8.8", "8.8.4.4"])
+        self.assertIs(dns.resolver.default_resolver, resolver)
+
+    def test_dnspython_module_lookup_uses_configured_default_resolver(self):
+        phone_resolver_contents = "nameserver 8.8.8.8\nnameserver 8.8.4.4\n"
+        with mock.patch.object(sys, "platform", "android"):
+            with mock.patch.object(
+                db.Path,
+                "read_text",
+                return_value=phone_resolver_contents,
+                autospec=True,
+            ):
+                db._configure_termux_dns()
+
+        configured_resolver = dns.resolver.default_resolver
+        with mock.patch.object(
+            configured_resolver,
+            "resolve",
+            return_value=mock.sentinel.answer,
+        ) as resolve:
+            answer = dns.resolver.resolve("example.invalid", "A")
+
+        self.assertIs(answer, mock.sentinel.answer)
+        resolve.assert_called_once()
+        self.assertEqual(resolve.call_args.args[:2], ("example.invalid", "A"))
 
     def test_termux_resolver_is_initialized_with_bounded_settings(self):
         resolver = mock.Mock()

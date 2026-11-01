@@ -1,10 +1,10 @@
 # ReelForge Project State — Single Source of Truth
 
 > **Current as of**: 2026-11-01
-> **Branch**: `main` (latest observed committed HEAD `23cc846`; local history is 4 commits ahead of `origin/main` before this task)
+> **Branch**: `main` (latest observed committed HEAD `4b89f86`; synchronized with `origin/main` before this follow-up)
 > **Current Version**: V3.7.4 Android/Termux MongoDB DNS compatibility (working tree implementation)
 > **Current Layer**: Termux DNS resolver setup before MongoDB SRV URI parsing
-> **Layer Status**: IMPLEMENTED & VERIFIED — focused checks 8/8; full V3 suite 297/297
+> **Layer Status**: IMPLEMENTED & VERIFIED — focused checks 11/11; full V3 suite 300/300
 
 ---
 
@@ -25,7 +25,7 @@ The system is actively progressing through the **Cloud Runtime Deployment** mile
 - V3.7.3-A replaces Python `openai-whisper` with a subprocess adapter for `whisper-cli`, explicitly configured `ggml-base.bin`, FFmpeg 16 kHz mono PCM preparation, per-call temporary directories, and mocked regression coverage. Docker packaging remains for V3.7.3-B.
 - V3.7.3-B adds a pinned CPU whisper.cpp multi-stage Docker build, SHA-1-verified multilingual Base model, external model mount target, and worker-only startup validation; Docker is not installed in this environment. Its recorded 300-test result is the historical V3.7.3-B checkpoint.
 - V3.7.1 + V3.7.2 replaces configurable OmniRoute/provider/model routes with a single fixed OpenRouter endpoint/model for text, evaluation, and vision. Local whisper.cpp transcription and FFmpeg frame extraction remain unchanged. Focused checks: 60/60; full V3 suite: 285/285.
-- V3.7.4 configures dnspython from `$PREFIX/etc/resolv.conf` only on the Termux Python prefix, immediately before PyMongo client construction, so Atlas SRV/TXT resolution can use Termux nameservers. DNS setup is covered by mocked tests; no live database lookup was performed.
+- V3.7.4 recognizes both Android and Linux Termux platform identifiers, parses Termux resolver text or a file path with strict IP validation, and configures dnspython immediately before PyMongo client construction. DNS setup and the module-level default-resolver lookup path are covered by mocked tests; no live database lookup was performed.
 
 ---
 
@@ -55,7 +55,7 @@ The distinction between **Committed**, **Implemented**, **Tested**, **Verified**
 | **V3.6.5** | Multi-user Publication Fan-out | Verified | Implemented (Working Tree) | `storage/job.py`, `processing/publication_fanout.py`, `processing/worker.py`, `onenote/writer.py`, bot retry command; `tests/test_v36_publication_fanout.py` (12/12 pass) |
 | **V3.7.3-A** | whisper.cpp Transcription Adapter | Verified (Uncommitted) | Working Tree | `processing/transcriber.py`, `config.py`, `tests/test_v34_portability.py` (13 tests; complete V3 suite 285/285 pass) |
 | **V3.7.3-B** | whisper.cpp Docker & Runtime Packaging | Verified in tests (Uncommitted); Docker build unavailable | Working Tree | `Dockerfile`, `processing/transcriber.py`, `processing/worker.py`, `tests/test_v373_runtime_packaging.py` (15 tests; full V3 suite 300/300) |
-| **V3.7.4** | Android/Termux MongoDB DNS Compatibility | Verified in mocked tests | Working Tree | `storage/db.py`; `tests/test_v34_termux_dns.py` (8/8; full V3 suite 297/297) |
+| **V3.7.4** | Android/Termux MongoDB DNS Compatibility | Verified in mocked tests | Working Tree | `storage/db.py`; `tests/test_v34_termux_dns.py` (11/11; full V3 suite 300/300) |
 
 ---
 
@@ -84,10 +84,10 @@ Prior V3 suites were verified on 2026-11-01. Current task verification:
 - **Current full V3 suite**: `python -m unittest discover -s tests -p "test_v3*.py"` — **289/289 passed** (0 failures, 0 errors; 36.420s).
 - **V3.7.4 Termux DNS focused tests before prefix-fallback correction**: `python -m unittest tests.test_v34_termux_dns` — **7/7 passed**.
 - **Full V3 suite before prefix-fallback correction**: `python -m unittest discover -s tests -p "test_v3*.py"` — **296/296 passed** (0 failures, 0 errors; 36.378s).
-- **After prefix-fallback correction**: current results are recorded in `.reelforge/ACTIVE_TASK.md` after the requested test runs.
+- **After Android platform/path parsing correction**: `python -m unittest tests.test_v34_termux_dns` — **11/11 passed**; `python -m unittest discover -s tests -p "test_v3*.py"` — **300/300 passed**.
 
 > **Test Tracking Status**:
-> The active V3 regression suite is discovered by `python -m unittest discover -s tests -p "test_v3*.py"`. Its count changed from the historical 300 at the V3.7.3-B checkpoint to 285 after replacing legacy configurable-gateway contract coverage during the OpenRouter migration. Later integration and Termux DNS coverage brings the current result to 296. Exploratory and manual verification scripts remain in `scratch/`.
+> The active V3 regression suite is discovered by `python -m unittest discover -s tests -p "test_v3*.py"`. Its count changed from the historical 300 at the V3.7.3-B checkpoint to 285 after replacing legacy configurable-gateway contract coverage during the OpenRouter migration. Later integration and Termux DNS coverage brings the current result to 300. Exploratory and manual verification scripts remain in `scratch/`.
 
 ---
 

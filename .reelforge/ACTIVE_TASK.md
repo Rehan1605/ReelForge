@@ -32,3 +32,11 @@ This historical recovery context is retained so the DNS checkpoint does not eras
 - **Completed implementation recorded at that checkpoint:** `processing/openrouter_gateway.py` provided fixed transport, bounded retries, and sanitized provider errors; text generation/JSON extraction and evaluation/vision used the shared route; image frames used the compatible image payload; vision failures could degrade without blocking persistence or notifications; related environment/architecture documentation and mocked route tests were updated.
 - **Recovery status then:** preserve existing V3.6.5 and V3.7.3-A/B working-tree work; next action was human review rather than commit or push.
 - **Verification recorded then:** focused integration cleanup passed 79/79 and the full V3 suite passed 289/289. These results are historical and separate from the current Termux DNS verification.
+
+## Follow-up correction — Android Termux DNS detection and resolver parsing
+
+- Added recognition for Android's `sys.platform == "android"`, retaining Linux Termux detection and non-Termux behavior.
+- `_parse_termux_nameservers` now accepts resolver text or a path/path-like value. Nameserver values still require successful `ipaddress.ip_address` validation.
+- Added mocked phone diagnostics coverage for `8.8.8.8` and `8.8.4.4`, and verified dnspython's public `dns.resolver.resolve()` path delegates through the configured `default_resolver` without network access.
+- Focused DNS tests: 11 passed. Full V3 suite: 300 passed.
+- No live DNS or MongoDB calls were made.

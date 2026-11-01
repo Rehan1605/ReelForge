@@ -53,7 +53,7 @@ def _termux_prefix() -> str:
 
 def _is_android_termux() -> bool:
     """Return whether this process is running from a Termux Python prefix."""
-    if not sys.platform.startswith("linux"):
+    if sys.platform != "android" and not sys.platform.startswith("linux"):
         return False
 
     # Termux Python normally has PREFIX set. sys.prefix is a safe fallback for
@@ -63,8 +63,18 @@ def _is_android_termux() -> bool:
     return normalized_prefix.endswith("/com.termux/files/usr")
 
 
-def _parse_termux_nameservers(contents: str) -> list[str]:
-    """Extract valid IPv4/IPv6 nameservers from resolv.conf text."""
+def _parse_termux_nameservers(contents: str | os.PathLike[str]) -> list[str]:
+    """Extract valid IPv4/IPv6 nameservers from resolv.conf text or a path."""
+    if isinstance(contents, os.PathLike):
+        contents = Path(contents).read_text(encoding="utf-8")
+    elif "\n" not in contents and "\r" not in contents:
+        # Accept a resolver-file path as well as its contents. This keeps the
+        # parser convenient for diagnostics while leaving ordinary one-line
+        # resolver text untouched unless it names an existing file.
+        candidate_path = Path(contents)
+        if candidate_path.is_file():
+            contents = candidate_path.read_text(encoding="utf-8")
+
     nameservers: list[str] = []
     for line in contents.splitlines():
         entry = re.split(r"[#;]", line, maxsplit=1)[0].strip()
