@@ -1,10 +1,10 @@
 # ReelForge Project State — Single Source of Truth
 
 > **Current as of**: 2026-11-01
-> **Branch**: `main` (latest observed committed HEAD `4b89f86`; synchronized with `origin/main` before this follow-up)
+> **Branch**: `main` (latest observed committed HEAD `8f1f4fd`; synchronized with `origin/main` before this follow-up)
 > **Current Version**: V3.7.4 Android/Termux MongoDB DNS compatibility (working tree implementation)
-> **Current Layer**: Termux DNS resolver setup before MongoDB SRV URI parsing
-> **Layer Status**: IMPLEMENTED & VERIFIED — focused checks 11/11; full V3 suite 300/300
+> **Current Layer**: Termux DNS resolver setup and OpenRouter response validation
+> **Layer Status**: IMPLEMENTED & VERIFIED — OpenRouter focused checks 14/14; full V3 suite 304/304
 
 ---
 
@@ -25,6 +25,7 @@ The system is actively progressing through the **Cloud Runtime Deployment** mile
 - V3.7.3-A replaces Python `openai-whisper` with a subprocess adapter for `whisper-cli`, explicitly configured `ggml-base.bin`, FFmpeg 16 kHz mono PCM preparation, per-call temporary directories, and mocked regression coverage. Docker packaging remains for V3.7.3-B.
 - V3.7.3-B adds a pinned CPU whisper.cpp multi-stage Docker build, SHA-1-verified multilingual Base model, external model mount target, and worker-only startup validation; Docker is not installed in this environment. Its recorded 300-test result is the historical V3.7.3-B checkpoint.
 - V3.7.1 + V3.7.2 replaces configurable OmniRoute/provider/model routes with a single fixed OpenRouter endpoint/model for text, evaluation, and vision. Local whisper.cpp transcription and FFmpeg frame extraction remain unchanged. Focused checks: 60/60; full V3 suite: 285/285.
+- OpenRouter response handling now requires non-empty string assistant content and rejects `finish_reason="length"` for text and vision. Reasoning fields are not used as answer content, and existing bounded transport retries are unchanged.
 - V3.7.4 recognizes both Android and Linux Termux platform identifiers, parses Termux resolver text or a file path with strict IP validation, and configures dnspython immediately before PyMongo client construction. DNS setup and the module-level default-resolver lookup path are covered by mocked tests; no live database lookup was performed.
 
 ---
@@ -84,10 +85,11 @@ Prior V3 suites were verified on 2026-11-01. Current task verification:
 - **Current full V3 suite**: `python -m unittest discover -s tests -p "test_v3*.py"` — **289/289 passed** (0 failures, 0 errors; 36.420s).
 - **V3.7.4 Termux DNS focused tests before prefix-fallback correction**: `python -m unittest tests.test_v34_termux_dns` — **7/7 passed**.
 - **Full V3 suite before prefix-fallback correction**: `python -m unittest discover -s tests -p "test_v3*.py"` — **296/296 passed** (0 failures, 0 errors; 36.378s).
-- **After Android platform/path parsing correction**: `python -m unittest tests.test_v34_termux_dns` — **11/11 passed**; `python -m unittest discover -s tests -p "test_v3*.py"` — **300/300 passed**.
+- **After Android platform/path parsing correction**: `python -m unittest tests.test_v34_termux_dns` — **11/11 passed**; full V3 suite — **300/300 passed**.
+- **OpenRouter response validation**: `python -m unittest tests.test_v34_ai_gateway tests.test_v36_vision_remote` — **14/14 passed**; `python -m unittest discover -s tests -p "test_v3*.py"` — **304/304 passed**.
 
 > **Test Tracking Status**:
-> The active V3 regression suite is discovered by `python -m unittest discover -s tests -p "test_v3*.py"`. Its count changed from the historical 300 at the V3.7.3-B checkpoint to 285 after replacing legacy configurable-gateway contract coverage during the OpenRouter migration. Later integration and Termux DNS coverage brings the current result to 300. Exploratory and manual verification scripts remain in `scratch/`.
+> The active V3 regression suite is discovered by `python -m unittest discover -s tests -p "test_v3*.py"`. Its count changed from the historical 300 at the V3.7.3-B checkpoint to 285 after replacing legacy configurable-gateway contract coverage during the OpenRouter migration. Later integration, Termux DNS, and OpenRouter response-validation coverage brings the current result to 304. Exploratory and manual verification scripts remain in `scratch/`.
 
 ---
 

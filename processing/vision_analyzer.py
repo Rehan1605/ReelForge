@@ -16,7 +16,11 @@ from config import (
     PROMPTS_DIR,
     VISION_MAX_FRAMES,
 )
-from processing.openrouter_gateway import post_chat_completion
+from processing.openrouter_gateway import (
+    extract_assistant_content,
+    post_chat_completion,
+    validate_assistant_content,
+)
 from processing.worker_workspace import effective_workspace
 from storage.brain_object import (
     load_latest_brain_object,
@@ -290,6 +294,7 @@ def call_vision_model(
     if resp_text.startswith("data:"):
         # Accumulate SSE chunks returned by the gateway
         delta_contents = []
+        finish_reason = None
         for line in resp_text.splitlines():
             line_str = line.strip()
             if line_str.startswith("data:"):
@@ -300,19 +305,30 @@ def call_vision_model(
                     chunk = json.loads(chunk_payload)
                     choices = chunk.get("choices", [])
                     if choices:
-                        delta = choices[0].get("delta", {})
-                        content = delta.get("content", "")
-                        if content:
-                            delta_contents.append(content)
+                        choice = choices[0]
+                        if isinstance(choice, dict):
+                            finish_reason = choice.get("finish_reason", finish_reason)
+                            delta = choice.get("delta", {})
+                            content = delta.get("content") if isinstance(delta, dict) else None
+                            if content is not None:
+                                delta_contents.append(content)
                 except json.JSONDecodeError:
                     pass
-        raw_message = "".join(delta_contents)
+        if any(not isinstance(content, str) for content in delta_contents):
+            raw_message = delta_contents
+        else:
+            raw_message = "".join(delta_contents)
+        raw_message = validate_assistant_content(
+            raw_message,
+            finish_reason,
+            modality="vision",
+        )
     else:
         try:
             data = response.json()
-            raw_message = data["choices"][0]["message"]["content"]
-        except Exception as e:
-            raise ValueError("OpenRouter vision response is not valid JSON or has an unexpected structure") from None
+        except Exception:
+            raise ValueError("OpenRouter vision response is not valid JSON") from None
+        raw_message = extract_assistant_content(data, modality="vision")
 
     cleaned_json_text = _strip_fences(raw_message)
 

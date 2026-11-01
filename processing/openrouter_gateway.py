@@ -18,6 +18,47 @@ MAX_RATE_LIMIT_RETRY_AFTER_SECONDS = 3.0
 TRANSIENT_STATUS_CODES = {500, 502, 503, 504}
 
 
+def validate_assistant_content(
+    content,
+    finish_reason,
+    *,
+    modality: str,
+) -> str:
+    """Validate assistant text without ever consulting reasoning fields."""
+    if finish_reason == "length":
+        raise ValueError(
+            f"OpenRouter returned an incomplete {modality} response (finish_reason=length)"
+        )
+    if not isinstance(content, str):
+        raise ValueError(
+            f"OpenRouter returned invalid {modality} message content; expected a non-empty string"
+        )
+    content = content.strip()
+    if not content:
+        raise ValueError(
+            f"OpenRouter returned empty {modality} message content"
+        )
+    return content
+
+
+def extract_assistant_content(data, *, modality: str) -> str:
+    """Extract validated assistant content from a chat-completion response."""
+    if not isinstance(data, dict):
+        raise ValueError(f"OpenRouter {modality} response has an invalid structure")
+    choices = data.get("choices")
+    if not isinstance(choices, list) or not choices or not isinstance(choices[0], dict):
+        raise ValueError(f"OpenRouter {modality} response has no assistant choice")
+
+    choice = choices[0]
+    message = choice.get("message")
+    content = message.get("content") if isinstance(message, dict) else None
+    return validate_assistant_content(
+        content,
+        choice.get("finish_reason"),
+        modality=modality,
+    )
+
+
 def _retry_after_seconds(value: str | None) -> float | None:
     if not value:
         return None

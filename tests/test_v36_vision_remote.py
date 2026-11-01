@@ -40,6 +40,56 @@ class TestOpenRouterVision(unittest.TestCase):
                     vision_analyzer.call_vision_model("private prompt", [])
         self.assertNotIn("secret/private", str(err.exception))
 
+    def test_vision_rejects_invalid_or_incomplete_content_without_reasoning_fallback(self):
+        invalid_bodies = (
+            (
+                "null content with reasoning",
+                {"choices": [{"message": {"content": None, "reasoning": "private reasoning", "reasoning_details": [{"text": "private detail"}]}, "finish_reason": "stop"}]},
+            ),
+            ("missing content", {"choices": [{"message": {"reasoning": "private reasoning"}, "finish_reason": "stop"}]}),
+            ("empty content", {"choices": [{"message": {"content": "  ", "reasoning": "private reasoning"}, "finish_reason": "stop"}]}),
+            ("non-string content", {"choices": [{"message": {"content": {"text": "private reasoning"}}, "finish_reason": "stop"}]}),
+            ("length finish reason", {"choices": [{"message": {"content": '{"visual_summary":"partial"', "reasoning": "private reasoning"}, "finish_reason": "length"}]}),
+        )
+
+        with mock.patch.object(config, "OPENROUTER_API_KEY", "test-key"):
+            for label, body in invalid_bodies:
+                with self.subTest(response=label):
+                    response = self.response()
+                    response.json.return_value = body
+                    response.text = json.dumps(body)
+                    with mock.patch(
+                        "processing.openrouter_gateway.requests.post",
+                        return_value=response,
+                    ) as post:
+                        with self.assertRaises(ValueError) as err:
+                            vision_analyzer.call_vision_model("inspect", [])
+                    self.assertEqual(post.call_count, 1)
+                    self.assertNotIn("private reasoning", str(err.exception))
+                    self.assertNotIn("private detail", str(err.exception))
+
+    def test_vision_returns_only_content_and_never_reasoning_fields(self):
+        body = {
+            "choices": [{
+                "message": {
+                    "content": '{"visual_summary":"visible answer"}',
+                    "reasoning": "private reasoning",
+                    "reasoning_details": [{"text": "private detail"}],
+                },
+                "finish_reason": "stop",
+            }]
+        }
+        response = self.response()
+        response.json.return_value = body
+        response.text = json.dumps(body)
+        with mock.patch.object(config, "OPENROUTER_API_KEY", "test-key"):
+            with mock.patch("processing.openrouter_gateway.requests.post", return_value=response):
+                result = vision_analyzer.call_vision_model("inspect", [])
+
+        self.assertEqual(result["visual_summary"], "visible answer")
+        self.assertNotIn("reasoning", result)
+        self.assertNotIn("private", str(result))
+
     def test_model_and_endpoint_overrides_are_not_in_public_signatures(self):
         self.assertNotIn("model", inspect.signature(vision_analyzer.call_vision_model).parameters)
         self.assertNotIn("base_url", inspect.signature(vision_analyzer.analyze_vision).parameters)

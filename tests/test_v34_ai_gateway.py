@@ -27,6 +27,52 @@ class TestOpenRouterGateway(unittest.TestCase):
         self.assertEqual(kwargs["headers"]["Authorization"], "Bearer test-key")
         self.assertFalse(kwargs["allow_redirects"])
 
+    def test_text_returns_content_without_reasoning_fields(self):
+        body = {
+            "choices": [{
+                "message": {
+                    "content": "user-facing answer",
+                    "reasoning": "private reasoning",
+                    "reasoning_details": [{"text": "private detail"}],
+                },
+                "finish_reason": "stop",
+            }]
+        }
+        response = self.response()
+        response.json.return_value = body
+        response.text = json.dumps(body)
+        with mock.patch.object(config, "OPENROUTER_API_KEY", "test-key"):
+            with mock.patch("processing.openrouter_gateway.requests.post", return_value=response):
+                self.assertEqual(llm_client.generate_text("prompt"), "user-facing answer")
+
+    def test_text_rejects_invalid_or_incomplete_content_without_reasoning_fallback(self):
+        invalid_bodies = (
+            (
+                "null content with reasoning",
+                {"choices": [{"message": {"content": None, "reasoning": "private reasoning", "reasoning_details": [{"text": "private detail"}]}, "finish_reason": "stop"}]},
+            ),
+            ("missing content", {"choices": [{"message": {"reasoning": "private reasoning"}, "finish_reason": "stop"}]}),
+            ("empty content", {"choices": [{"message": {"content": "  ", "reasoning": "private reasoning"}, "finish_reason": "stop"}]}),
+            ("non-string content", {"choices": [{"message": {"content": {"text": "private reasoning"}}, "finish_reason": "stop"}]}),
+            ("length finish reason", {"choices": [{"message": {"content": "{\\\"partial\\\":", "reasoning": "private reasoning"}, "finish_reason": "length"}]}),
+        )
+
+        with mock.patch.object(config, "OPENROUTER_API_KEY", "test-key"):
+            for label, body in invalid_bodies:
+                with self.subTest(response=label):
+                    response = self.response()
+                    response.json.return_value = body
+                    response.text = json.dumps(body)
+                    with mock.patch(
+                        "processing.openrouter_gateway.requests.post",
+                        return_value=response,
+                    ) as post:
+                        with self.assertRaises(ValueError) as err:
+                            llm_client.generate_text("prompt")
+                    self.assertEqual(post.call_count, 1)
+                    self.assertNotIn("private reasoning", str(err.exception))
+                    self.assertNotIn("private detail", str(err.exception))
+
     def test_missing_key_fails_before_network(self):
         with mock.patch.object(config, "OPENROUTER_API_KEY", ""):
             with mock.patch("processing.openrouter_gateway.requests.post") as post:

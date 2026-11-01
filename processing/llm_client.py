@@ -1,7 +1,11 @@
 import json
 import re
 from config import OPENROUTER_MODEL
-from processing.openrouter_gateway import post_chat_completion
+from processing.openrouter_gateway import (
+    extract_assistant_content,
+    post_chat_completion,
+    validate_assistant_content,
+)
 
 
 def _strip_fences(text: str) -> str:
@@ -95,6 +99,7 @@ def generate_text(
     # Support SSE streaming data chunks returned by compatible gateways.
     if resp_text.startswith("data:"):
         delta_contents = []
+        finish_reason = None
         for line in resp_text.splitlines():
             line_str = line.strip()
             if line_str.startswith("data:"):
@@ -105,28 +110,32 @@ def generate_text(
                     chunk = json.loads(chunk_payload)
                     choices = chunk.get("choices", [])
                     if choices:
-                        content = choices[0].get("delta", {}).get("content", "")
-                        if content:
-                            delta_contents.append(content)
+                        choice = choices[0]
+                        if isinstance(choice, dict):
+                            finish_reason = choice.get("finish_reason", finish_reason)
+                            delta = choice.get("delta", {})
+                            content = delta.get("content") if isinstance(delta, dict) else None
+                            if content is not None:
+                                delta_contents.append(content)
                 except json.JSONDecodeError:
                     pass
-        raw_message = "".join(delta_contents)
+        if any(not isinstance(content, str) for content in delta_contents):
+            raw_message = delta_contents
+        else:
+            raw_message = "".join(delta_contents)
+        raw_message = validate_assistant_content(
+            raw_message,
+            finish_reason,
+            modality="text",
+        )
     else:
         try:
             data = response.json()
-            choices = data.get("choices", [])
-            if not choices:
-                raise ValueError("OpenRouter response contains no choices")
-            raw_message = choices[0].get("message", {}).get("content", "")
-        except Exception as exc:
-            raise ValueError("OpenRouter response is not valid JSON") from exc
+        except Exception:
+            raise ValueError("OpenRouter text response is not valid JSON") from None
+        raw_message = extract_assistant_content(data, modality="text")
 
-    if not raw_message:
-        raise ValueError(
-            f"OpenRouter returned empty message content for the fixed model '{OPENROUTER_MODEL}'"
-        )
-
-    return raw_message.strip()
+    return raw_message
 
 
 def generate_json(

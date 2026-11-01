@@ -33,6 +33,13 @@ This historical recovery context is retained so the DNS checkpoint does not eras
 - **Recovery status then:** preserve existing V3.6.5 and V3.7.3-A/B working-tree work; next action was human review rather than commit or push.
 - **Verification recorded then:** focused integration cleanup passed 79/79 and the full V3 suite passed 289/289. These results are historical and separate from the current Termux DNS verification.
 
+## OpenRouter response validation follow-up
+
+- Added shared assistant-content validation for text and vision responses: content must be a non-empty string, and `finish_reason="length"` is rejected as incomplete.
+- Reasoning and reasoning-detail fields are never used as fallback content.
+- Standard JSON and SSE response paths apply the checks. Transport retry behavior remains unchanged; invalid HTTP 200 responses are not retried.
+- Mocked text/vision response cases and existing transport retry coverage passed: focused suites 14/14; full V3 suite 304/304.
+
 ## Follow-up correction — Android Termux DNS detection and resolver parsing
 
 - Added recognition for Android's `sys.platform == "android"`, retaining Linux Termux detection and non-Termux behavior.
