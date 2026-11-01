@@ -32,7 +32,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from config import EVALUATION_MODEL, TEXT_MODEL
+from config import OPENROUTER_MODEL
 from processing.llm_client import generate_json
 
 EVALUATION_VERSION = "2.7.0"
@@ -279,13 +279,12 @@ def evaluate_reel_evidence(
     vision_analysis: Any,
     category: str,
     knowledge: dict,
-    model: str | None = None,
 ) -> dict:
     """
-    Evaluate a single Reel using the grounded OmniRoute LLM judge.
+    Evaluate a single Reel using the fixed OpenRouter free-model judge.
     Returns the validated evaluation dictionary.
     """
-    target_model = model or EVALUATION_MODEL or TEXT_MODEL
+    target_model = OPENROUTER_MODEL
 
     available_modalities = {
         "caption": bool(caption and isinstance(caption, str) and caption.strip()),
@@ -306,7 +305,6 @@ def evaluate_reel_evidence(
 
     raw_response = generate_json(
         prompt=prompt,
-        model=target_model,
         temperature=0.1,
     )
 
@@ -320,7 +318,7 @@ def evaluate_reel_evidence(
     return evaluation
 
 
-def evaluate_brain_object(brain: dict, model: str | None = None) -> dict:
+def evaluate_brain_object(brain: dict) -> dict:
     """
     Evaluate a loaded Brain Object dictionary against its internal source evidence.
     Does NOT modify the Brain Object.
@@ -350,7 +348,6 @@ def evaluate_brain_object(brain: dict, model: str | None = None) -> dict:
         vision_analysis=vision_analysis,
         category=category,
         knowledge=knowledge,
-        model=model,
     )
 
 
@@ -364,7 +361,6 @@ def evaluate_reel(
     transcript: str | None = None,
     brain_object: dict | None = None,
     vision_analysis: Any = None,
-    model: str | None = None,
 ) -> dict:
     """Legacy compatibility helper."""
     if brain_object:
@@ -375,7 +371,7 @@ def evaluate_reel(
             b.setdefault("content", {})["transcript"] = transcript
         if vision_analysis is not None:
             b.setdefault("content", {})["vision_analysis"] = vision_analysis
-        return evaluate_brain_object(b, model=model)
+        return evaluate_brain_object(b)
 
     knowledge = {"category": expected_category or "Other"}
     return evaluate_reel_evidence(
@@ -387,5 +383,4 @@ def evaluate_reel(
         vision_analysis=vision_analysis,
         category=expected_category or "Other",
         knowledge=knowledge,
-        model=model,
     )

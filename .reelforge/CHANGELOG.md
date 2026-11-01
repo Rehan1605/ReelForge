@@ -4,6 +4,48 @@
 
 ---
 
+## [V3.7.1 + V3.7.2 Fixed OpenRouter Text & Vision Gateway] - 2026-11-01
+### Changed
+- Consolidated text, evaluation, and frame-based vision requests on the fixed OpenRouter chat-completions endpoint and `openrouter/free` model, authenticated with `OPENROUTER_API_KEY`.
+- Removed configurable model, endpoint, provider aliases, and vision gateway probing so no paid-model/provider fallback can be selected through application configuration or CLI arguments.
+- Vision failure is surfaced as degraded status in the Telegram result while processing continues with remaining evidence and saved vision data if present.
+### Verification
+- Focused checks: 60/60 passed. Full V3 suite: 285/285 passed. `git diff --check` passed; no live OpenRouter calls were made.
+
+---
+
+## [V3.7.3-B whisper.cpp Docker & Runtime Packaging] - 2026-11-01
+### Added
+- Multi-stage Docker build pinned to official whisper.cpp v1.9.5 commit `d1be6fde11ac6e0407606b4e42fe72d34add8037`; CPU build uses GGML OpenMP and final runtime excludes compiler tools.
+- Default image includes multilingual `ggml-base.bin` at `/opt/reelforge/models/ggml-base.bin`, verified at build time against the upstream-published SHA-1. `runtime-base` omits the model for persistent external mounts.
+- Worker startup validation checks whisper-cli, model readability/name, FFmpeg, and resource settings without running inference. Bot-only mode skips worker validation.
+- Added Docker operations documentation and mocked packaging/runtime regression tests.
+### Changed
+- Removed the explicit CPU PyTorch install from Docker; retained `libgomp1` for the OpenMP-enabled whisper.cpp CLI. FFmpeg remains installed.
+### Verification
+- Focused tests: 37/37 passed. Full V3 suite: 300/300 passed. Docker CLI is not installed in the current environment; no image build was possible.
+
+---
+
+## [V3.7.3-A whisper.cpp Transcription Adapter] - 2026-11-01
+### Changed
+- Replaced Python `openai-whisper` lazy model loading with a safe local whisper.cpp CLI adapter using explicitly configured multilingual `ggml-base.bin`.
+- FFmpeg prepares per-call 16 kHz mono signed 16-bit PCM WAV; CLI transcript files are parsed with documented `-otxt` / `-of` output flags.
+- Added subprocess, timeout, cleanup, concurrency, pipeline compatibility, and environment contract tests. Focused verification: 101/101 passed; full V3 suite: 285/285 passed.
+### Deployment
+- `whisper-cli` and the model artifact must be provisioned externally. Docker packaging is deferred to V3.7.3-B.
+
+---
+
+## [V3.6.5 Multi-user Publication Fan-out] - 2026-11-01
+### Added
+- Durable shared-job requester tracking with an audience revision so a requester arriving during processing is included before job completion.
+- Independent per-user OneNote publication attempts and publication-only `/publish <reel_id>` retries, using the requesting user's OAuth cache.
+- Persisted failed publication slots for users without Microsoft connection and aggregate retry guidance.
+- Mocked regression suite `tests/test_v36_publication_fanout.py` (12 tests); full V3 suite: 284/284 passed.
+
+---
+
 ## [V3.6.4 Remote AI Vision Connectivity] - 2026-09-24
 ### Added
 - Dedicated vision gateway configuration overrides in `config.py`: `VISION_BASE_URL` and `VISION_API_KEY` with seamless fallback to `OMNIROUTE_BASE_URL` and `OMNIROUTE_API_KEY`.

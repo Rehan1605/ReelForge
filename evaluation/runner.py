@@ -22,7 +22,7 @@ from pathlib import Path
 from statistics import mean, median
 from typing import Any
 
-from config import CATEGORIES, EVALUATION_MODEL, TEXT_MODEL
+from config import CATEGORIES, OPENROUTER_MODEL
 from evaluation.evaluate import evaluate_brain_object
 from storage.brain_object import load_brain_object, scan_valid_brain_objects
 
@@ -266,9 +266,9 @@ def print_aggregate_report(report: dict) -> None:
     print("=" * 70 + "\n")
 
 
-def run_full_evaluation(model: str | None = None) -> dict:
+def run_full_evaluation() -> dict:
     """Evaluate all 74 active valid Brain Objects and persist results."""
-    target_model = model or EVALUATION_MODEL or TEXT_MODEL
+    target_model = OPENROUTER_MODEL
     run_id = _format_date_id()
     run_dir = RESULTS_DIR / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -289,7 +289,7 @@ def run_full_evaluation(model: str | None = None) -> dict:
         print(f"[{i:2d}/{total}] Evaluating `{r_id}` [{cat}] '{title[:35]}'...")
 
         try:
-            eval_res = evaluate_brain_object(brain, model=target_model)
+            eval_res = evaluate_brain_object(brain)
             save_evaluation_result(run_dir, eval_res)
             evaluations.append(eval_res)
             score = eval_res.get("overall_score")
@@ -325,15 +325,15 @@ def run_full_evaluation(model: str | None = None) -> dict:
     return report
 
 
-def run_single_evaluation(reel_id: str, model: str | None = None) -> dict:
+def run_single_evaluation(reel_id: str) -> dict:
     """Evaluate a single specified Reel ID."""
-    target_model = model or EVALUATION_MODEL or TEXT_MODEL
+    target_model = OPENROUTER_MODEL
     brain = load_brain_object(reel_id)
     if not brain:
         raise FileNotFoundError(f"Active Brain Object for Reel ID '{reel_id}' not found.")
 
     print(f"\n🔍 Evaluating Reel `{reel_id}` with {target_model}...")
-    result = evaluate_brain_object(brain, model=target_model)
+    result = evaluate_brain_object(brain)
 
     # Print summary card
     print("\n" + "-" * 60)
@@ -372,15 +372,14 @@ def main():
     parser = argparse.ArgumentParser(description="ReelForge Grounded Evaluation Runner")
     parser.add_argument("--reel", type=str, help="Evaluate a single Reel ID")
     parser.add_argument("--all", action="store_true", help="Evaluate all active valid Brain Objects")
-    parser.add_argument("--model", type=str, default=None, help="Override evaluation model")
     parser.add_argument("--report", nargs="?", const="latest", default=None, help="Display aggregate report")
 
     args = parser.parse_args()
 
     if args.reel:
-        run_single_evaluation(args.reel, model=args.model)
+        run_single_evaluation(args.reel)
     elif args.all:
-        run_full_evaluation(model=args.model)
+        run_full_evaluation()
     elif args.report:
         run_id = args.report
         if run_id == "latest":

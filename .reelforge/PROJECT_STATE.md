@@ -1,10 +1,10 @@
 # ReelForge Project State — Single Source of Truth
 
-> **Current as of**: 2026-09-24
-> **Branch**: `main` (last commit `4064789`, ahead of `origin/main` by 3 commits)
-> **Current Version**: V3.6
-> **Current Layer**: Layer 3 (Remote AI Vision Connectivity & Cloud Readiness)
-> **Layer Status**: IMPLEMENTED & VERIFIED (Tests: 272/272 passing)
+> **Current as of**: 2026-11-01
+> **Branch**: `main` (latest observed committed HEAD `23cc846`; local history is 4 commits ahead of `origin/main` before this task)
+> **Current Version**: V3.7.4 Android/Termux MongoDB DNS compatibility (working tree implementation)
+> **Current Layer**: Termux DNS resolver setup before MongoDB SRV URI parsing
+> **Layer Status**: IMPLEMENTED & VERIFIED — focused checks 8/8; full V3 suite 297/297
 
 ---
 
@@ -12,7 +12,7 @@
 
 "If I know absolutely nothing about ReelForge, where are we right now?"
 
-ReelForge is an automated Instagram reel knowledge extraction and personal intelligence engine. It downloads reels, transcribes audio (Whisper), performs multimodal visual analysis (OmniRoute LLM / Gemini / Llama vision), categorizes domain knowledge, stores structured Brain Objects in MongoDB Atlas (authoritative) with local JSON backup, and publishes rich formatted notes into user-specific Microsoft OneNote notebooks via Microsoft Graph.
+ReelForge is an automated Instagram reel knowledge extraction and personal intelligence engine. It downloads reels, transcribes audio through FFmpeg and the local whisper.cpp CLI using an explicitly provisioned multilingual Base model, performs visual analysis and text extraction through the fixed OpenRouter `openrouter/free` route, categorizes domain knowledge, stores structured Brain Objects in MongoDB Atlas (authoritative) with local JSON backup, and publishes rich formatted notes into user-specific Microsoft OneNote notebooks via Microsoft Graph.
 
 The system is actively progressing through the **Cloud Runtime Deployment** milestone:
 - V3.1 through V3.3 were previously committed (`68a5084`, `7241185`, `87739d9`, `d8bebfe`).
@@ -21,6 +21,11 @@ The system is actively progressing through the **Cloud Runtime Deployment** mile
 - V3.6.3 implemented managed OAuth callback server lifecycle and cloud binding (`4064789`, 14 tests, total 258).
 - V3.6.4 implements remote vision connectivity overrides (`VISION_BASE_URL`, `VISION_API_KEY`), URL normalization, preflight connectivity probing (`check_vision_gateway`), and test suite expansion (`tests/test_v36_vision_remote.py`, 14 tests).
 - All 272 V3 unit and integration tests are tracked in `tests/` and pass (100% pass rate).
+- V3.6.5 implements shared-job requester tracking and per-user OneNote publication fan-out, with publication-only retries (`tests/test_v36_publication_fanout.py`, 12 tests); full V3 suite: 284/284 passing on 2026-11-01.
+- V3.7.3-A replaces Python `openai-whisper` with a subprocess adapter for `whisper-cli`, explicitly configured `ggml-base.bin`, FFmpeg 16 kHz mono PCM preparation, per-call temporary directories, and mocked regression coverage. Docker packaging remains for V3.7.3-B.
+- V3.7.3-B adds a pinned CPU whisper.cpp multi-stage Docker build, SHA-1-verified multilingual Base model, external model mount target, and worker-only startup validation; Docker is not installed in this environment. Its recorded 300-test result is the historical V3.7.3-B checkpoint.
+- V3.7.1 + V3.7.2 replaces configurable OmniRoute/provider/model routes with a single fixed OpenRouter endpoint/model for text, evaluation, and vision. Local whisper.cpp transcription and FFmpeg frame extraction remain unchanged. Focused checks: 60/60; full V3 suite: 285/285.
+- V3.7.4 configures dnspython from `$PREFIX/etc/resolv.conf` only on the Termux Python prefix, immediately before PyMongo client construction, so Atlas SRV/TXT resolution can use Termux nameservers. DNS setup is covered by mocked tests; no live database lookup was performed.
 
 ---
 
@@ -47,28 +52,42 @@ The distinction between **Committed**, **Implemented**, **Tested**, **Verified**
 | **V3.6.2** | Worker Workspace Isolation | Verified | Committed (`d500583`) | `processing/worker_workspace.py`, pipeline routing; `tests/test_v36_layer2_workspace.py` (59/59 pass) |
 | **V3.6.3** | Managed OAuth Lifecycle & Cloud Configuration | Verified | Committed (`4064789`) | `auth/oauth_server.py`, `bot/telegram_bot.py`, `config.py`; `tests/test_v36_oauth_lifecycle.py` (14/14 pass) |
 | **V3.6.4** | Remote AI Vision Connectivity & Cloud Readiness | Verified | Implemented (Working Tree) | `config.py`, `processing/vision_analyzer.py`, `WORKER.env.example`; `tests/test_v36_vision_remote.py` (14/14 pass) |
+| **V3.6.5** | Multi-user Publication Fan-out | Verified | Implemented (Working Tree) | `storage/job.py`, `processing/publication_fanout.py`, `processing/worker.py`, `onenote/writer.py`, bot retry command; `tests/test_v36_publication_fanout.py` (12/12 pass) |
+| **V3.7.3-A** | whisper.cpp Transcription Adapter | Verified (Uncommitted) | Working Tree | `processing/transcriber.py`, `config.py`, `tests/test_v34_portability.py` (13 tests; complete V3 suite 285/285 pass) |
+| **V3.7.3-B** | whisper.cpp Docker & Runtime Packaging | Verified in tests (Uncommitted); Docker build unavailable | Working Tree | `Dockerfile`, `processing/transcriber.py`, `processing/worker.py`, `tests/test_v373_runtime_packaging.py` (15 tests; full V3 suite 300/300) |
+| **V3.7.4** | Android/Termux MongoDB DNS Compatibility | Verified in mocked tests | Working Tree | `storage/db.py`; `tests/test_v34_termux_dns.py` (8/8; full V3 suite 297/297) |
 
 ---
 
 ## 3. Working Tree & Git Status
 
 Current Git Status on branch `main`:
-- **Last Committed Checkpoint**: `4064789` (*feat: add cloud-ready Microsoft OAuth server lifecycle (V3.6.3)*).
-- **Current Working Tree State**: Working tree contains V3.6.4 Remote AI Vision connectivity enhancements and test suite `tests/test_v36_vision_remote.py`. 272/272 tests pass.
+- **Latest committed HEAD observed before this task**: `23cc846` (four local commits ahead of `origin/main`).
+- **Pre-existing working-tree work preserved**: uncommitted V3.6.5 changes and untracked V3.6.5 version record, publication fan-out code/test, and `docs/` directory.
+- **V3.7.3-A/B** add the transcription adapter, pinned CPU packaging, model provisioning, startup validation, tests, and documentation. No commit or history mutation was performed.
 
 ---
 
 ## 4. Test Verification Summary
 
-All test suites verified from tracked `tests/` on 2026-09-24:
+Prior V3 suites were verified on 2026-11-01. Current task verification:
+- **Focused suites**: V3.7.3-B startup/runtime packaging plus V3.7.3-A adapter/config contract — 37/37 passed.
+- **V3.7.3-B historical full-suite checkpoint**: `python -m unittest discover -s tests -p "test_v3*.py"` — 300/300 passed (0 failures, 0 errors; 31.429s). This was the count at that release checkpoint, before replacement of legacy gateway-contract test cases.
+- **Docker image**: not built; Docker CLI unavailable in this environment.
 - **V3.6 Layer 3 Remote AI Vision Connectivity**: `tests/test_v36_vision_remote.py` — **14/14 PASSED** (0 failures, 0 errors in 0.005s).
 - **V3.6 Layer 3 Managed OAuth Lifecycle**: `tests/test_v36_oauth_lifecycle.py` — **14/14 PASSED** (0 failures, 0 errors in 3.62s).
 - **V3.6 Layer 2 Workspace Isolation**: `tests/test_v36_layer2_workspace.py` — **59/59 PASSED** (0 failures, 0 errors in 0.75s).
 - **V3.6 Layer 1 Storage Lifecycle Audit**: `tests/test_v36_layer1_storage_audit.py` — **19/19 PASSED** (0 failures, 0 errors in 0.68s).
-- **Full V3 Test Suite**: `python -m unittest discover -s tests -p "test_v3*.py"` — **272/272 PASSED** (0 failures, 0 errors in 5.35s).
+- **V3.6.5 Publication Fan-out**: `tests/test_v36_publication_fanout.py` — **12/12 PASSED**.
+- **Post OpenRouter migration full V3 suite**: `python -m unittest discover -s tests -p "test_v3*.py"` — **285/285 PASSED** (0 failures, 0 errors; 31.326s), before this integration cleanup.
+- **Current cleanup focused suite**: 79/79 passed.
+- **Current full V3 suite**: `python -m unittest discover -s tests -p "test_v3*.py"` — **289/289 passed** (0 failures, 0 errors; 36.420s).
+- **V3.7.4 Termux DNS focused tests before prefix-fallback correction**: `python -m unittest tests.test_v34_termux_dns` — **7/7 passed**.
+- **Full V3 suite before prefix-fallback correction**: `python -m unittest discover -s tests -p "test_v3*.py"` — **296/296 passed** (0 failures, 0 errors; 36.378s).
+- **After prefix-fallback correction**: current results are recorded in `.reelforge/ACTIVE_TASK.md` after the requested test runs.
 
 > **Test Tracking Status**:
-> The complete active V3 regression test suite (12 test files, 258 tests) is tracked in version control under `tests/`. Exploratory, manual verification, and evaluation scripts remain in `scratch/`.
+> The active V3 regression suite is discovered by `python -m unittest discover -s tests -p "test_v3*.py"`. Its count changed from the historical 300 at the V3.7.3-B checkpoint to 285 after replacing legacy configurable-gateway contract coverage during the OpenRouter migration. Later integration and Termux DNS coverage brings the current result to 296. Exploratory and manual verification scripts remain in `scratch/`.
 
 ---
 

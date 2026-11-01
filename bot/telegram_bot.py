@@ -30,7 +30,7 @@ from config import (
 from auth.oauth_server import start_oauth_for_user, start_oauth_server, stop_oauth_server
 from onenote.sanitizer import sanitize_page_title
 from processing.pipeline import process_reel
-from processing.worker import worker_loop
+from processing.worker import validate_worker_runtime, worker_loop
 from bot.notifier import (
     JobNotifier as _JobNotifier,
     notifier_kind_for_job,
@@ -58,7 +58,13 @@ from storage.brain_object import (
     scan_valid_brain_objects,
     search_brain_objects,
 )
-from storage.job import get_job_for_user, list_jobs_for_user, submit_job
+from storage.job import (
+    JOB_TYPE_PUBLICATION,
+    get_job_for_user,
+    list_jobs_for_user,
+    submit_job,
+)
+from storage.publication import get_publication
 from storage.user import disconnect_user_microsoft, get_user_microsoft
 
 # Callback action identifiers (never carry a user_id; the user is always
@@ -986,6 +992,53 @@ async def reprocess_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
 
+async def publish_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Retry this user's OneNote publication without rerunning extraction."""
+    user, _ = _resolve_user(update)
+    user_id = (user or {}).get("user_id")
+    if not user_id:
+        await update.message.reply_text("Please use /start before requesting a publication retry.")
+        return
+    if not context.args:
+        await update.message.reply_text("Usage: /publish <reel_id>")
+        return
+
+    reel_id = context.args[0].strip()
+    try:
+        brain = load_brain_object(reel_id, user_id=user_id)
+    except PermissionError:
+        await update.message.reply_text("That Reel is not in your saved library.")
+        return
+    except FileNotFoundError:
+        await update.message.reply_text("Reel not found in your saved library.")
+        return
+
+    publication = get_publication(reel_id, user_id=user_id)
+    if publication and publication.get("state") == "complete":
+        await update.message.reply_text("Your OneNote page is already published.")
+        return
+
+    chat = getattr(update, "effective_chat", None)
+    chat_id = getattr(chat, "id", None) or getattr(update.message, "chat_id", None)
+    source_url = (brain.get("source") or {}).get("url") or ""
+    job, duplicate = submit_job(
+        claim_key=f"publication:{reel_id}:{user_id}",
+        reel_url=source_url,
+        user_id=user_id,
+        reel_id=reel_id,
+        chat_id=chat_id,
+        job_type=JOB_TYPE_PUBLICATION,
+    )
+    if duplicate:
+        await update.message.reply_text(
+            f"Your OneNote publication retry is already queued. Job: `{job['_id']}`"
+        )
+    else:
+        await update.message.reply_text(
+            f"OneNote publication retry queued without reprocessing the Reel. Job: `{job['_id']}`"
+        )
+
+
 async def archive_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user, _ = _resolve_user(update)
     user_id = (user or {}).get("user_id")
@@ -1207,6 +1260,7 @@ async def creator_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def run_bot():
     async def _start_job_worker(_app):
+        validate_worker_runtime()
         loop = asyncio.get_running_loop()
 
         def make_notifier(job):
@@ -1305,6 +1359,7 @@ def run_bot():
     app.add_handler(CommandHandler("stats", stats_command))
     app.add_handler(CommandHandler("force", force_command))
     app.add_handler(CommandHandler("reprocess", reprocess_command))
+    app.add_handler(CommandHandler("publish", publish_command))
     app.add_handler(CommandHandler("job", job_command))
     app.add_handler(CommandHandler("jobs", jobs_command))
     app.add_handler(CommandHandler("archive", archive_command))

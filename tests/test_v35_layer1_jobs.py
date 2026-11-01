@@ -222,10 +222,19 @@ class TestJobSchema(unittest.TestCase):
     def test_summarize_result_projection(self):
         summary = job_mod.summarize_result(
             {"success": True, "cached": False, "onenote_success": True,
-             "onenote_error": None, "category": "Food", "brain": {"id": "X1"}, "error": None}
+             "onenote_error": None, "category": "Food", "brain": {"id": "X1"},
+             "vision_status": "degraded", "error": None}
         )
         self.assertEqual(summary["reel_id"], "X1")
         self.assertEqual(summary["category"], "Food")
+        self.assertEqual(summary["vision_status"], "degraded")
+
+    def test_summarize_result_remains_compatible_without_vision_status(self):
+        summary = job_mod.summarize_result(
+            {"success": True, "cached": False, "onenote_success": True,
+             "onenote_error": None, "category": "Food", "brain": {"id": "X1"}, "error": None}
+        )
+        self.assertNotIn("vision_status", summary)
 
 
 class TestJobsStore(unittest.TestCase):

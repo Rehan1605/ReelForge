@@ -7,22 +7,16 @@ import shutil
 import subprocess
 import sys
 import tempfile
-import traceback
 from pathlib import Path
-
-import requests
 
 from config import (
     BRAINS_DIR,
     FFMPEG_PATH,
-    OMNIROUTE_API_KEY,
-    OMNIROUTE_BASE_URL,
+    OPENROUTER_MODEL,
     PROMPTS_DIR,
-    VISION_API_KEY,
-    VISION_BASE_URL,
     VISION_MAX_FRAMES,
-    VISION_MODEL,
 )
+from processing.openrouter_gateway import post_chat_completion
 from processing.worker_workspace import effective_workspace
 from storage.brain_object import (
     load_latest_brain_object,
@@ -259,22 +253,10 @@ def _build_prompt(caption: str = "", transcript: str = "") -> str:
 def call_vision_model(
     prompt_text: str,
     frame_paths: list[Path],
-    model: str | None = None,
-    base_url: str | None = None,
-    api_key: str | None = None,
 ) -> dict:
     """
     Call an OpenAI-compatible chat-completions endpoint with prompt and base64 image frames.
     """
-    target_model = model or VISION_MODEL
-    target_base_url = (base_url or VISION_BASE_URL or OMNIROUTE_BASE_URL).rstrip("/")
-    target_api_key = api_key if api_key is not None else (VISION_API_KEY or OMNIROUTE_API_KEY)
-
-    if target_base_url.endswith("/chat/completions"):
-        endpoint = target_base_url
-    else:
-        endpoint = f"{target_base_url}/chat/completions"
-
     # Construct user content items
     user_content: list[dict] = [
         {"type": "text", "text": prompt_text}
@@ -289,14 +271,8 @@ def call_vision_model(
             }
         })
 
-    headers = {
-        "Content-Type": "application/json",
-    }
-    if target_api_key:
-        headers["Authorization"] = f"Bearer {target_api_key}"
-
     payload = {
-        "model": target_model,
+        "model": OPENROUTER_MODEL,
         "messages": [
             {
                 "role": "user",
@@ -306,22 +282,7 @@ def call_vision_model(
         "temperature": 0.1,
     }
 
-    try:
-        response = requests.post(
-            endpoint,
-            json=payload,
-            headers=headers,
-            timeout=120,
-        )
-    except requests.RequestException as e:
-        raise ConnectionError(
-            f"Failed to connect to vision gateway at {endpoint}: {e}"
-        ) from e
-
-    if response.status_code != 200:
-        raise RuntimeError(
-            f"Vision gateway returned HTTP {response.status_code}: {response.text}"
-        )
+    response = post_chat_completion(payload, timeout=120)
 
     resp_text = response.text.strip()
     raw_message = ""
@@ -351,18 +312,14 @@ def call_vision_model(
             data = response.json()
             raw_message = data["choices"][0]["message"]["content"]
         except Exception as e:
-            raise ValueError(
-                f"Vision gateway response is not valid JSON or unexpected structure: {response.text}"
-            ) from e
+            raise ValueError("OpenRouter vision response is not valid JSON or has an unexpected structure") from None
 
     cleaned_json_text = _strip_fences(raw_message)
 
     try:
         parsed_result = json.loads(cleaned_json_text)
     except json.JSONDecodeError as e:
-        raise ValueError(
-            f"Vision model output could not be decoded as JSON.\nRaw output:\n{raw_message}"
-        ) from e
+        raise ValueError("OpenRouter vision output could not be decoded as JSON") from None
 
     return _validate_and_normalize_schema(parsed_result)
 
@@ -501,9 +458,6 @@ def analyze_vision(
     update_brain: bool = False,
     reel_id: str | None = None,
     max_frames: int | None = None,
-    model: str | None = None,
-    base_url: str | None = None,
-    api_key: str | None = None,
 ) -> dict:
     """
     Sample frames from a video, query the vision model, parse the response,
@@ -519,13 +473,10 @@ def analyze_vision(
 
         prompt_text = _build_prompt(caption=caption, transcript=transcript)
 
-        print(f"Calling vision model via gateway ({model or VISION_MODEL})...")
+        print(f"Calling vision model via OpenRouter ({OPENROUTER_MODEL})...")
         vision_analysis = call_vision_model(
             prompt_text=prompt_text,
             frame_paths=frames,
-            model=model,
-            base_url=base_url,
-            api_key=api_key,
         )
         print("Vision analysis complete.")
 
@@ -550,9 +501,6 @@ def analyze_latest_reel(
     transcript: str | None = None,
     update_brain: bool = True,
     max_frames: int | None = None,
-    model: str | None = None,
-    base_url: str | None = None,
-    api_key: str | None = None,
 ) -> dict:
     """
     Find the latest downloaded Reel and Brain Object, run visual analysis,
@@ -582,9 +530,6 @@ def analyze_latest_reel(
         update_brain=update_brain,
         reel_id=brain_id,
         max_frames=max_frames,
-        model=model,
-        base_url=base_url,
-        api_key=api_key,
     )
 
 
@@ -626,59 +571,6 @@ def test_sampling(
             print("Temporary sampling test directory cleaned up.")
 
 
-def check_vision_gateway(
-    base_url: str | None = None,
-    api_key: str | None = None,
-    timeout: int = 10,
-) -> tuple[bool, str]:
-    """
-    Check connectivity and authentication with the configured OpenAI-compatible vision gateway.
-    Performs a lightweight probe to verify connectivity and API key validity without
-    requiring video frames or heavyweight model inference.
-    Returns (ok: bool, message: str).
-    """
-    target_base_url = (base_url or VISION_BASE_URL or OMNIROUTE_BASE_URL).rstrip("/")
-    if target_base_url.endswith("/chat/completions"):
-        base = target_base_url[:-len("/chat/completions")]
-    else:
-        base = target_base_url
-
-    target_api_key = api_key if api_key is not None else (VISION_API_KEY or OMNIROUTE_API_KEY)
-
-    headers = {}
-    if target_api_key:
-        headers["Authorization"] = f"Bearer {target_api_key}"
-
-    models_endpoint = f"{base}/models"
-    try:
-        resp = requests.get(models_endpoint, headers=headers, timeout=timeout)
-        if resp.status_code == 200:
-            return True, f"Vision gateway reachable at {models_endpoint} (HTTP 200)"
-        elif resp.status_code in (401, 403):
-            return False, f"Vision gateway reachable at {models_endpoint} but authentication failed (HTTP {resp.status_code})"
-        elif resp.status_code == 404:
-            # Fallback probe to /chat/completions for gateways that omit /models
-            chat_endpoint = f"{target_base_url if target_base_url.endswith('/chat/completions') else f'{target_base_url}/chat/completions'}"
-            post_resp = requests.post(
-                chat_endpoint,
-                headers={"Content-Type": "application/json", **headers},
-                json={"model": VISION_MODEL, "messages": [{"role": "user", "content": "ping"}], "max_tokens": 1},
-                timeout=timeout,
-            )
-            if post_resp.status_code in (200, 400):
-                return True, f"Vision gateway reachable at {chat_endpoint} (HTTP {post_resp.status_code})"
-            elif post_resp.status_code in (401, 403):
-                return False, f"Vision gateway reachable at {chat_endpoint} but authentication failed (HTTP {post_resp.status_code})"
-            return False, f"Vision gateway at {chat_endpoint} returned HTTP {post_resp.status_code}"
-        return False, f"Vision gateway returned HTTP {resp.status_code}"
-    except requests.exceptions.ConnectionError as e:
-        return False, f"Connection refused or unreachable: {target_base_url} ({e})"
-    except requests.exceptions.Timeout:
-        return False, f"Connection timed out after {timeout}s: {target_base_url}"
-    except Exception as e:
-        return False, f"Vision gateway check failed: {e}"
-
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="ReelForge V2.1 Visual Analyzer CLI"
@@ -701,29 +593,6 @@ if __name__ == "__main__":
         help=f"Maximum frames to sample (default: {VISION_MAX_FRAMES})",
     )
     parser.add_argument(
-        "--model",
-        type=str,
-        default=None,
-        help=f"Vision model name (default: {VISION_MODEL})",
-    )
-    parser.add_argument(
-        "--base-url",
-        type=str,
-        default=None,
-        help=f"OpenAI-compatible base URL (default: {VISION_BASE_URL or OMNIROUTE_BASE_URL})",
-    )
-    parser.add_argument(
-        "--api-key",
-        type=str,
-        default=None,
-        help="Optional API key for the vision gateway",
-    )
-    parser.add_argument(
-        "--check-gateway",
-        action="store_true",
-        help="Check connectivity and authentication to the configured vision gateway",
-    )
-    parser.add_argument(
         "--no-update-brain",
         action="store_true",
         help="Do not update the Brain Object with results",
@@ -732,15 +601,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     try:
-        if args.check_gateway:
-            ok, msg = check_vision_gateway(base_url=args.base_url, api_key=args.api_key)
-            if ok:
-                print(f"✅ {msg}")
-                sys.exit(0)
-            else:
-                print(f"❌ {msg}", file=sys.stderr)
-                sys.exit(1)
-
         if args.sample_only:
             test_sampling(video_path=args.video, max_frames=args.max_frames)
             sys.exit(0)
@@ -748,9 +608,6 @@ if __name__ == "__main__":
         result = analyze_latest_reel(
             update_brain=not args.no_update_brain,
             max_frames=args.max_frames,
-            model=args.model,
-            base_url=args.base_url,
-            api_key=args.api_key,
         )
 
         print("\n=== VISUAL ANALYSIS RESULT ===")
@@ -759,5 +616,4 @@ if __name__ == "__main__":
 
     except Exception as e:
         print(f"\n❌ Visual Analysis Failed: {e}", file=sys.stderr)
-        traceback.print_exc()
         sys.exit(1)

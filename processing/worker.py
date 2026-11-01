@@ -15,6 +15,7 @@ import threading
 import traceback
 
 from processing.pipeline import process_reel
+from processing.publication_fanout import publish_for_user, publish_to_requesters
 from storage.brain_object import associate_user_with_brain
 from storage.job import (
     LEASE_TTL_SECONDS,
@@ -31,6 +32,13 @@ DEFAULT_WORKER_PREFIX = "reelforge-worker"
 
 # Heartbeat cadence for keeping a long pipeline run's claim lease fresh.
 LEASE_RENEW_INTERVAL_SECONDS = LEASE_TTL_SECONDS / 3
+
+
+def validate_worker_runtime() -> bool:
+    """Fail a worker start early when local transcription tools are missing."""
+    from processing.transcriber import validate_transcription_runtime
+
+    return validate_transcription_runtime()
 
 
 def _default_worker_id() -> str:
@@ -152,19 +160,59 @@ def run_claimed_job(
     renewer.start()
 
     try:
-        result = process_fn(
-            job["reel_url"],
-            _safe_notify,
-            bool(job.get("force")),
-            job.get("user_id"),
-        )
+        if job.get("job_type") == "publication":
+            # Publication retry jobs deliberately bypass the Reel pipeline.
+            result = publish_for_user(job.get("reel_id"), job.get("user_id"))
+        else:
+            result = process_fn(
+                job["reel_url"],
+                _safe_notify,
+                bool(job.get("force")),
+                job.get("user_id"),
+            )
 
         if result.get("success"):
-            _associate_secondary_users(job, result)
+            if job.get("job_type") != "publication":
+                _associate_secondary_users(job, result)
+                brain = result.get("brain") or {}
+                requesters = job.get("requested_by") or []
+                needs_fanout = bool(result.get("cached")) or len(set(requesters)) > 1
+                if brain.get("id") and needs_fanout:
+                    fanout_job = dict(job)
+                    fanout_job["primary_publication_attempted"] = (
+                        not bool(result.get("cached"))
+                        and "onenote_success" in result
+                    )
+                    result["publications"] = publish_to_requesters(brain, fanout_job)
             try:
+                expected_version = job.get("requesters_version")
                 persisted = complete_job(
-                    job["_id"], summarize_result(result), col=col, now=now
+                    job["_id"], summarize_result(result), col=col, now=now,
+                    expected_requesters_version=expected_version,
                 )
+                # A duplicate submit can attach another user while this worker
+                # is publishing. Re-read and fan out the newly committed
+                # audience before allowing the shared job to become terminal.
+                for _ in range(3):
+                    if persisted or expected_version is None:
+                        break
+                    latest = col.find_one({"_id": job["_id"]})
+                    if (
+                        not latest
+                        or latest.get("status") != "processing"
+                        or latest.get("claimed_by") != job.get("claimed_by")
+                        or latest.get("requesters_version", 0) <= expected_version
+                    ):
+                        break
+                    expected_version = latest.get("requesters_version")
+                    if job.get("job_type") != "publication" and result.get("brain", {}).get("id"):
+                        result["publications"] = publish_to_requesters(
+                            result["brain"], latest
+                        )
+                    persisted = complete_job(
+                        job["_id"], summarize_result(result), col=col, now=now,
+                        expected_requesters_version=expected_version,
+                    )
             except Exception as e:
                 # Pipeline side effects already happened but the terminal write
                 # failed (Mongo outage). Do NOT notify "failed" -- that would be
@@ -279,6 +327,8 @@ def standalone_worker():
     only to notify users; communicates with the bot process exclusively
     through the shared MongoDB ``reel_jobs`` collection.
     """
+    validate_worker_runtime()
+
     from config import BOT_TOKEN
     from telegram import Bot as TelegramBot
 

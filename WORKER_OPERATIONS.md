@@ -22,7 +22,7 @@ real credentials).
 | Brain JSON (`brains/*.json`) | **Backup / fallback only.** Unmodified by the worker except as write-behind backup + offline/test fallback. Mongo routing keys off the dir name (see §2). |
 | `token_cache.bin` | **Legacy V2 only** (used solely when `GraphClient(user_id=None)`). **Never a worker requirement.** |
 | OAuth `/connect` | **Laptop-side loopback flow** for now. A worker only *consumes* per-user token caches from Mongo; it never serves the OAuth callback. |
-| OmniRoute | **Externally reachable/configurable dependency** (`OMNIROUTE_BASE_URL`). The worker contract does **not** assume localhost. |
+| OpenRouter | **Externally reachable dependency**; fixed endpoint and `openrouter/free` model, authenticated by `OPENROUTER_API_KEY`. Worker operation does not assume localhost. |
 
 ---
 
@@ -56,7 +56,7 @@ back to ephemeral local files.
 | `TELEGRAM_BOT_TOKEN` | yes | Telegram Bot API token (`bot/telegram_bot.py`). |
 | `MICROSOFT_CLIENT_ID` | yes | Azure public-client app ID (OneNote Graph publishing). |
 | `MONGODB_URI` | yes | Atlas connection string. Required for authoritative persistence. |
-| `OMNIROUTE_BASE_URL` | no | AI gateway base URL (`…/v1`). Must be reachable from the worker. |
+| `OPENROUTER_API_KEY` | yes | Single key for fixed text, evaluation and vision routes. |
 
 `MONGODB_URI` is technically optional (default `""` → local-file-only mode), but
 in the worker contract it is **effectively required**: without it the system
@@ -67,20 +67,17 @@ guarantee.
 
 | Variable | Default (config.py) | Notes |
 |---|---|---|
-| `OMNIROUTE_API_KEY` (secret) | `""` | Bearer for gateway; empty = unauthenticated. Falls back to `OPENAI_API_KEY`. |
 | `MONGODB_DB_NAME` | `reelforge` | Database name. |
-| `TEXT_MODEL` | `qwen2.5:7b-instruct` | Text/categorization/extraction model. |
-| `EVALUATION_MODEL` | `TEXT_MODEL` | Evaluation judge model. |
-| `VISION_MODEL` | `llama3.2-vision:latest` | Vision model. |
 | `VISION_MAX_FRAMES` | `8` | Frames sampled for vision (1–8+; clamped ≥1). |
-| `WHISPER_MODEL` | `base` | Whisper transcription model. |
-| `WHISPER_CACHE_DIR` | none (`~/.cache/whisper`) | Persistent volume for the model weight cache. |
+| `WHISPER_CPP_BIN` | `whisper-cli` | Installed whisper.cpp CLI executable. |
+| `WHISPER_CPP_MODEL_PATH` | required outside packaged image; image default `/opt/reelforge/models/ggml-base.bin` | Explicit path to readable multilingual `ggml-base.bin`; English-only model names are rejected. No startup download or model substitution. |
+| `WHISPER_CPP_THREADS` | `2` | CPU threads per transcription process. |
+| `WHISPER_CPP_TIMEOUT` | `300` | Timeout in seconds for each FFmpeg/whisper.cpp subprocess. |
 | `REELFORGE_EMBEDDED_WORKER` | `1` (on) | V3.5 L2. `0`/`false`/`no` disables the in-process worker inside `bot/telegram_bot.py`, so a separate `python -m processing.worker` process does the claiming. Keep `1` for single-process local development. |
 | `FFMPEG_PATH` | Windows build dir on `nt`, `""` elsewhere | Empty → resolve `ffmpeg`/`ffprobe` from system PATH. |
 | `WORKSPACE_DIR` | `<ROOT>/reels` | Media scratch. All standalone workers share this root; isolation sub-dirs are created automatically (see §9). |
 | `BRAINS_DIR` | `<ROOT>/brains` | Brain JSON backup/fallback. Keep `…/brains` for Mongo-primary routing. |
 | `PROMPTS_DIR` | `<ROOT>/prompts` | Prompt templates; only set if bundled elsewhere. |
-| `OPENAI_BASE_URL` / `OPENAI_API_KEY` | — | Compatibility aliases used as fallbacks for the OmniRoute vars. |
 | `MICROSOFT_TENANT_ID`, `MICROSOFT_AUTHORITY`, `OAUTH_REDIRECT_URI`, `OAUTH_HOST`, `OAUTH_LISTEN_PORT`, `OAUTH_BASE_URL`, `OAUTH_STATE_SECRET` (secret) | see `config.py` | Only needed on the device running `/connect` (laptop-side). Not required for a worker. |
 
 **Not required / legacy on a worker:** `token_cache.bin`, `sessions/`,
@@ -93,11 +90,11 @@ guarantee.
 | Service | Direction | Purpose |
 |---|---|---|
 | MongoDB Atlas cluster (`mongodb+srv://…` via `MONGODB_URI`) | outbound | Authoritative brains/users/oauth_sessions store. |
-| OmniRoute gateway (`OMNIROUTE_BASE_URL`) | outbound | All text/vision/evaluation LLM calls (`POST {base}/chat/completions`). |
+| OpenRouter (`https://openrouter.ai/api/v1`) | outbound | Text, evaluation and vision use `POST /chat/completions` with `openrouter/free`. |
 | `api.telegram.org` | outbound | Telegram polling (443). |
 | Instagram + media CDNs | outbound | `yt-dlp` download. |
 | Microsoft `login.microsoftonline.com` + `graph.microsoft.com` | outbound | Per-user token refresh + OneNote page creation. |
-| Whisper model endpoint (HuggingFace mirror) | outbound, first run only | Model download into `WHISPER_CACHE_DIR`. Pre-cache the weights on a persistent volume to make restart offline-instant. |
+| whisper.cpp CLI + model artifact | local | Install the `whisper-cli` binary and provision multilingual `ggml-base.bin`; ReelForge does not download either. |
 
 ## 6. Required Ports
 
@@ -113,13 +110,13 @@ guarantee.
 **Persistent (must survive worker restart — and does, because it is remote):**
 - MongoDB Atlas: `brains` (Brain Objects), `users` (incl. `microsoft.token_cache`),
   `oauth_sessions` (laptop-side sessions, TTL-expiring).
-- Whisper model weights on `WHISPER_CACHE_DIR` (optional but recommended).
+- The explicitly provisioned `ggml-base.bin` model artifact (must remain available across restarts).
 
 **Ephemeral (safe to lose on restart):**
 - `WORKSPACE_DIR/workers/<worker-id>/` media (mp4, thumbnail, `*.info.json`) —
   cleaned by the pipeline at job completion (`_cleanup_reel_media`).
 - Vision frame temp dirs (`tempfile.mkdtemp`, system temp) — cleaned in `finally`.
-- System-temp audio used by Whisper/FFmpeg.
+- Per-call system-temporary WAV and transcript output used by FFmpeg/whisper.cpp; removed after each call.
 - Worker-local `brains/` JSON **if** not configured per §2 — replaced from Mongo on demand.
 - Orphaned `WORKSPACE_DIR/workers/` sub-directories from crashed workers — safe
   to remove manually or on next fresh container start.
@@ -167,10 +164,84 @@ command. The standalone worker uses its own `telegram.Bot` client (from
 `TELEGRAM_BOT_TOKEN`, env only — never job docs) purely to send progress/result
 messages; it never runs an Application/polling loop.
 
-Docker image (`Dockerfile`): `CMD ["python", "bot/telegram_bot.py"]`, CPU-only
-torch, `ffmpeg` + `libgomp1` installed via apt. A fresh worker: clone/import
-image → inject env (never the laptop's `.env`) → ensure `ffmpeg` on PATH →
-start. First `process_reel` downloads the Whisper model into `WHISPER_CACHE_DIR`.
+Docker image (`Dockerfile`): `CMD ["python", "bot/telegram_bot.py"]`. The
+default `runtime` target contains CPU `whisper-cli`, FFmpeg, the multilingual
+Base model, and Python app dependencies. It excludes the compiler toolchain and
+PyTorch. `libgomp1` remains because whisper.cpp is built with GGML OpenMP. The
+image starts the bot in embedded-worker mode by default; worker startup validates
+transcription tools before consuming jobs. With `REELFORGE_EMBEDDED_WORKER=0`,
+the bot remains bot-only and does not require transcription tools at startup.
+
+### Docker image build and start
+
+From the repository root, with Docker BuildKit enabled:
+
+```bash
+docker build -t reelforge:v3.7.3-b .
+docker run --env-file .env \
+  -e WHISPER_CPP_MODEL_PATH=/opt/reelforge/models/ggml-base.bin \
+  reelforge:v3.7.3-b
+```
+
+Populate required application values in the injected environment. The example
+`.env` keeps `WHISPER_CPP_MODEL_PATH` blank for host development; when using it
+with Docker, set that variable to the image path as shown because an explicit
+blank env-file value overrides Docker's built-in default. The image fetches the
+model during `docker build`, verifies it against the upstream-published SHA-1,
+and stores it in `/opt/reelforge/models/`, outside `WORKSPACE_DIR`. Container
+startup never downloads the model.
+
+The whisper.cpp builder stage is pinned to official release v1.9.5 commit
+`d1be6fde11ac6e0407606b4e42fe72d34add8037`. To update it, deliberately change
+`WHISPER_CPP_COMMIT` in the Dockerfile to a full reviewed upstream commit SHA,
+then rebuild and run the V3 suite plus image smoke checks. Keep the model SHA
+check unless upstream publishes an updated verified model artifact.
+
+### Mounting a persistent model instead of embedding it
+
+The `runtime-base` target contains the app and CLI but omits model download and
+the model file. Build and run with a persistent, read-only host model directory:
+
+```bash
+docker build --target runtime-base -t reelforge:v3.7.3-b-no-model .
+docker run --env-file .env \
+  --mount type=bind,src=/path/to/persistent/models,dst=/models,readonly \
+  -e WHISPER_CPP_MODEL_PATH=/models/ggml-base.bin \
+  reelforge:v3.7.3-b-no-model
+```
+
+The mounted file must be named `ggml-base.bin`, readable by the container user,
+and provisioned by the operator. Verify it against the upstream Base SHA-1
+`465707469ff3a37a2b9b8d8f89f2f99de7299dac`. This target avoids adding the
+model to the image and avoids startup downloads; external model storage must
+persist across container replacement.
+
+### CPU and memory planning
+
+The multilingual Base model is about 142 MiB on disk. Each active whisper.cpp
+process loads its own model and working memory. `WHISPER_CPP_THREADS=2` caps CPU
+threads per transcription process, not across workers. Start with low worker
+concurrency (one worker on a small host); total inference threads are roughly
+`worker_count * WHISPER_CPP_THREADS`, plus FFmpeg and the bot. Reserve at least
+1 GiB RAM per concurrently transcribing worker as a conservative starting
+point, then measure peak RSS with real workloads on the target host. This is an
+operational estimate, not a model vendor guarantee.
+
+For a standalone worker, override the container command with
+`python -m processing.worker` and set `REELFORGE_EMBEDDED_WORKER=0` on the bot
+container. Each worker process independently validates the binary, model, and
+FFmpeg before starting its job loop.
+
+### Startup validation and troubleshooting
+
+The embedded worker validates during `post_init`; the standalone worker
+validates before creating its worker workspace. Validation checks that
+`shutil.which` locates `whisper-cli` and `ffmpeg`, that the configured model is
+readable and named `ggml-base.bin`, and that thread/timeout values are positive.
+It does not run inference. A failure stops worker startup with a specific
+error. Check `WHISPER_CPP_BIN`/container `PATH`, mount permissions,
+`WHISPER_CPP_MODEL_PATH`, and FFmpeg installation. Bot-only mode skips these
+checks because it does not consume jobs.
 
 ## 9. V3.6 Layer 2 — Worker Workspace Isolation
 
@@ -226,7 +297,7 @@ lock). Repeated calls within one process always return the same path.
 | Reel mp4 / thumbnail / info.json | `WORKSPACE_DIR/workers/<worker-id>/` | ✅ Worker-local |
 | Brain Objects (JSON backup) | `BRAINS_DIR` (shared) | ✅ Shared, unaffected |
 | Brain Objects (MongoDB) | Atlas `brains` collection | ✅ Shared, unaffected |
-| Whisper model weights | `WHISPER_CACHE_DIR` (separate) | ✅ Shared, unaffected |
+| whisper.cpp model | `WHISPER_CPP_MODEL_PATH` (separate) | ✅ Shared, unaffected |
 | Vision frame temp dirs | `tempfile.mkdtemp()` (system temp) | ✅ Process-local by OS |
 | OneNote publication records | `brain.publications.*` in MongoDB | ✅ Shared, unaffected |
 
@@ -304,8 +375,8 @@ for a fresh worker:
 
 1. **Config loads** — all required env vars present (else `config.py` raises at import).
 2. **Mongo reachable** — `python storage/db.py` (pings Atlas, lists collections; masks URI).
-3. **OmniRoute reachable** — a small request to `OMNIROUTE_BASE_URL` (OpenAI-compatible; verify `POST …/v1/chat/completions` or the models listing responds before enablement).
-4. **Whisper model cached** — `WHISPER_CACHE_DIR` non-empty / on a persistent volume.
+3. **OpenRouter configured** — provide `OPENROUTER_API_KEY`. Text and vision use the fixed `openrouter/free` route without paid model or provider fallback; free-tier capacity is rate-limited.
+4. **whisper.cpp configured** — `WHISPER_CPP_BIN` resolves and `WHISPER_CPP_MODEL_PATH` names an existing multilingual `ggml-base.bin`.
 5. **Media scratch writable** — `WORKSPACE_DIR` exists and is writable. Worker sub-directories are created automatically; no per-worker directory pre-creation is needed.
 6. **FFmpeg present** — `ffmpeg -version` / `ffprobe -version` resolve from PATH.
 7. **Telegram reachable** — bot's `run_polling()` successfully connects.
@@ -319,8 +390,8 @@ have been removed or made optional in Layers 1–4:
 - `WORKSPACE_DIR`/`BRAINS_DIR`/`PROMPTS_DIR` are absolute, env-overridable, root-anchored.
 - `FFMPEG_PATH` defaults to `""` (system PATH) on non-Windows.
 - `token_cache.bin`, `sessions/`, `MONGODB_USERNAME`/`MONGODB_PASSWORD` are not required.
-- The only `localhost` default left is `OMNIROUTE_BASE_URL`, which the contract
-  says must be overridden to a reachable gateway URL.
+- No AI gateway localhost default remains; the OpenRouter endpoint and model
+  are fixed in code.
 
 Remaining operational caveats (not blockers): keep `BRAINS_DIR` as `…/brains`
 (Mongo routing heuristic, §2), and supply `OAUTH_STATE_SECRET` + the OAuth
@@ -341,8 +412,8 @@ worker process automatically receives a unique, isolated ephemeral media
 directory at `WORKSPACE_DIR/workers/w-<pid>-<random>/`. All pipeline components
 (downloader, transcriber, vision analyzer, cleanup) resolve the correct directory
 via `processing.worker_workspace.effective_workspace()`. `BRAINS_DIR` and
-`WHISPER_CACHE_DIR` are deliberately outside the isolated workspace and remain
-shared. Embedded / local-dev mode is unaffected — it continues to use the flat
+`WHISPER_CPP_MODEL_PATH` points to an explicitly provisioned model outside the
+isolated media workspace and is shared. Embedded / local-dev mode is unaffected — it continues to use the flat
 `WORKSPACE_DIR` directly. Thread-safe activation uses double-checked locking so
 concurrent startup within a single process is safe. Operators do not need to
 configure per-worker paths.

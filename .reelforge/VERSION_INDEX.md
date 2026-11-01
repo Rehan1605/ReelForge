@@ -28,6 +28,10 @@
 | **V3.6.2** | Worker Workspace Isolation | 2026-09-15 | Verified | Commit `d500583` | [`versions/V3.6.2.md`](versions/V3.6.2.md) |
 | **V3.6.3** | OAuth Cloud Lifecycle & Remote Binding | 2026-09-24 | Verified | Commit `4064789` | [`versions/V3.6.3.md`](versions/V3.6.3.md) |
 | **V3.6.4** | Remote AI Vision Connectivity & Cloud Readiness | 2026-09-24 | In Progress (Uncommitted) | Working Tree (`4064789..HEAD`) | [`versions/V3.6.4.md`](versions/V3.6.4.md) |
+| **V3.6.5** | Multi-user Publication Fan-out | 2026-11-01 | Verified (Uncommitted) | Working Tree (`4064789..HEAD`) | [`versions/V3.6.5.md`](versions/V3.6.5.md) |
+| **V3.7.3-A** | whisper.cpp Transcription Adapter | 2026-11-01 | Verified (Uncommitted) | Working Tree | [`versions/V3.7.3-A.md`](versions/V3.7.3-A.md) |
+| **V3.7.3-B** | whisper.cpp Docker & Runtime Packaging | 2026-11-01 | Verified in tests (Docker build unavailable) | Working Tree | [`versions/V3.7.3-B.md`](versions/V3.7.3-B.md) |
+| **V3.7.1 + V3.7.2** | Fixed OpenRouter Text & Vision Gateway | 2026-11-01 | Verified (Uncommitted) | Working Tree | [`versions/V3.7.1-2.md`](versions/V3.7.1-2.md) |
 
 ---
 

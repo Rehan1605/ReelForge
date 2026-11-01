@@ -1,12 +1,7 @@
 import json
 import re
-import time
-import requests
-
-from config import OMNIROUTE_API_KEY, OMNIROUTE_BASE_URL, TEXT_MODEL
-
-MAX_RETRIES = 3
-TRANSIENT_STATUS_CODES = {429, 500, 502, 503, 504}
+from config import OPENROUTER_MODEL
+from processing.openrouter_gateway import post_chat_completion
 
 
 def _strip_fences(text: str) -> str:
@@ -73,27 +68,15 @@ def _safe_recover_json_text(text: str) -> str:
 
 def generate_text(
     prompt: str,
-    model: str | None = None,
     temperature: float = 0.1,
     max_tokens: int | None = None,
     timeout: int = 60,
 ) -> str:
     """
-    Send a text prompt to the OmniRoute /chat/completions endpoint with
-    lightweight retries for transient errors (429, 5xx, timeouts, connection errors).
+    Send a text prompt to the fixed OpenRouter free-model route.
     """
-    target_model = model or TEXT_MODEL
-    target_base_url = OMNIROUTE_BASE_URL.rstrip("/")
-    endpoint = f"{target_base_url}/chat/completions"
-
-    headers = {
-        "Content-Type": "application/json",
-    }
-    if OMNIROUTE_API_KEY:
-        headers["Authorization"] = f"Bearer {OMNIROUTE_API_KEY}"
-
     payload: dict = {
-        "model": target_model,
+        "model": OPENROUTER_MODEL,
         "messages": [
             {
                 "role": "user",
@@ -105,118 +88,59 @@ def generate_text(
     if max_tokens is not None:
         payload["max_tokens"] = max_tokens
 
-    last_error: Exception | None = None
+    response = post_chat_completion(payload, timeout)
+    resp_text = response.text.strip()
+    raw_message = ""
 
-    for attempt in range(MAX_RETRIES + 1):
+    # Support SSE streaming data chunks returned by compatible gateways.
+    if resp_text.startswith("data:"):
+        delta_contents = []
+        for line in resp_text.splitlines():
+            line_str = line.strip()
+            if line_str.startswith("data:"):
+                chunk_payload = line_str[5:].strip()
+                if chunk_payload == "[DONE]":
+                    break
+                try:
+                    chunk = json.loads(chunk_payload)
+                    choices = chunk.get("choices", [])
+                    if choices:
+                        content = choices[0].get("delta", {}).get("content", "")
+                        if content:
+                            delta_contents.append(content)
+                except json.JSONDecodeError:
+                    pass
+        raw_message = "".join(delta_contents)
+    else:
         try:
-            response = requests.post(
-                endpoint,
-                json=payload,
-                headers=headers,
-                timeout=timeout,
-            )
-        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as exc:
-            last_error = exc
-            if attempt < MAX_RETRIES:
-                delay = min(1.0 * (2 ** attempt), 10.0)
-                time.sleep(delay)
-                continue
-            if isinstance(exc, requests.exceptions.ConnectionError):
-                raise ConnectionError(
-                    f"Failed to connect to OmniRoute gateway at '{endpoint}' after {MAX_RETRIES + 1} attempts."
-                ) from exc
-            else:
-                raise TimeoutError(
-                    f"Request to OmniRoute gateway at '{endpoint}' timed out after {MAX_RETRIES + 1} attempts."
-                ) from exc
-        except requests.RequestException as exc:
-            raise RuntimeError(
-                f"Network error communicating with OmniRoute gateway at '{endpoint}': {exc}"
-            ) from exc
+            data = response.json()
+            choices = data.get("choices", [])
+            if not choices:
+                raise ValueError("OpenRouter response contains no choices")
+            raw_message = choices[0].get("message", {}).get("content", "")
+        except Exception as exc:
+            raise ValueError("OpenRouter response is not valid JSON") from exc
 
-        if response.status_code in TRANSIENT_STATUS_CODES:
-            last_error = RuntimeError(
-                f"OmniRoute gateway returned transient HTTP {response.status_code}: {response.text}"
-            )
-            if attempt < MAX_RETRIES:
-                # Respect Retry-After if provided
-                retry_after = response.headers.get("Retry-After")
-                if retry_after and retry_after.isdigit():
-                    delay = min(float(retry_after), 10.0)
-                else:
-                    delay = min(1.0 * (2 ** attempt), 10.0)
-                time.sleep(delay)
-                continue
-            raise last_error
+    if not raw_message:
+        raise ValueError(
+            f"OpenRouter returned empty message content for the fixed model '{OPENROUTER_MODEL}'"
+        )
 
-        if response.status_code != 200:
-            raise RuntimeError(
-                f"OmniRoute gateway returned HTTP {response.status_code}: {response.text}"
-            )
-
-        resp_text = response.text.strip()
-        raw_message = ""
-
-        # Support SSE streaming data chunks (e.g. data: {"choices": [{"delta": {"content": "..."}}]})
-        if resp_text.startswith("data:"):
-            delta_contents = []
-            for line in resp_text.splitlines():
-                line_str = line.strip()
-                if line_str.startswith("data:"):
-                    chunk_payload = line_str[5:].strip()
-                    if chunk_payload == "[DONE]":
-                        break
-                    try:
-                        chunk = json.loads(chunk_payload)
-                        choices = chunk.get("choices", [])
-                        if choices:
-                            delta = choices[0].get("delta", {})
-                            content = delta.get("content", "")
-                            if content:
-                                delta_contents.append(content)
-                    except json.JSONDecodeError:
-                        pass
-            raw_message = "".join(delta_contents)
-        else:
-            try:
-                data = response.json()
-                choices = data.get("choices", [])
-                if not choices:
-                    raise ValueError(f"OmniRoute response contains no 'choices': {data}")
-                message = choices[0].get("message", {})
-                raw_message = message.get("content", "")
-            except Exception as exc:
-                raise ValueError(
-                    f"OmniRoute gateway response is not valid JSON: {response.text}"
-                ) from exc
-
-        if not raw_message:
-            raise ValueError(
-                f"OmniRoute returned empty message content for model '{target_model}'. "
-                f"Full response payload: {response.text[:500]}"
-            )
-
-        return raw_message.strip()
-
-    if last_error:
-        raise last_error
-    raise RuntimeError(f"Failed to get response from OmniRoute gateway at '{endpoint}'")
+    return raw_message.strip()
 
 
 def generate_json(
     prompt: str,
-    model: str | None = None,
     temperature: float = 0.1,
     max_tokens: int | None = None,
     timeout: int = 60,
 ) -> dict:
     """
-    Send a prompt to OmniRoute requesting JSON, safely strip markdown fences,
+    Send a prompt to OpenRouter requesting JSON, safely strip markdown fences,
     apply deterministic JSON recovery, and return the parsed Python dict.
     """
     raw_text = generate_text(
         prompt=prompt,
-        model=model,
         temperature=temperature,
         max_tokens=max_tokens,
         timeout=timeout,
@@ -236,17 +160,13 @@ def generate_json(
     try:
         parsed = json.loads(recovered_text)
     except json.JSONDecodeError as exc:
-        snippet = raw_text[:300] + ("..." if len(raw_text) > 300 else "")
         raise ValueError(
-            f"Model '{model or TEXT_MODEL}' returned malformed JSON.\n"
-            f"JSON error: {exc}\n"
-            f"Raw output (first 300 chars):\n{snippet}"
+            f"OpenRouter returned malformed JSON. JSON error: {exc}"
         ) from exc
 
     if not isinstance(parsed, dict):
         raise ValueError(
-            f"Expected JSON dictionary from model '{model or TEXT_MODEL}', "
-            f"got {type(parsed).__name__}: {parsed}"
+            f"Expected JSON dictionary from OpenRouter, got {type(parsed).__name__}"
         )
 
     return parsed

@@ -15,10 +15,11 @@
 5. [ADR-005: Idempotent OneNote Publication via Slot Claims](#adr-005-idempotent-onenote-publication-via-slot-claims)
 6. [ADR-006: Provider-Agnostic AI Gateway (OmniRoute)](#adr-006-provider-agnostic-ai-gateway-omniroute)
 7. [ADR-007: Laptop-Side Loopback OAuth / Server-Side Token Consumption](#adr-007-laptop-side-loopback-oauth--server-side-token-consumption)
-8. [ADR-008: Persistent Whisper Model Cache Decoupled from Scratch](#adr-008-persistent-whisper-model-cache-decoupled-from-scratch)
+8. [ADR-008: Python Whisper Model Cache Decoupled from Scratch (Superseded)](#adr-008-python-whisper-model-cache-decoupled-from-scratch-superseded)
 9. [ADR-009: Disciplined Git Checkpoints (Commit ≠ Push)](#adr-009-disciplined-git-checkpoints-commit--push)
 10. [ADR-010: Managed OAuth Server Lifecycle & Cloud Remote Toggle](#adr-010-managed-oauth-server-lifecycle--cloud-remote-toggle)
 11. [ADR-011: Dedicated Remote Vision Gateway Routing & Preflight Verification](#adr-011-dedicated-remote-vision-gateway-routing--preflight-verification)
+12. [ADR-012: Local whisper.cpp CLI with Explicit Multilingual Base Model](#adr-012-local-whispercpp-cli-with-explicit-multilingual-base-model)
 
 ---
 
@@ -99,14 +100,24 @@
 
 ---
 
-### ADR-008: Persistent Whisper Model Cache Decoupled from Scratch
+### ADR-008: Python Whisper Model Cache Decoupled from Scratch (Superseded)
 
-- **Status**: Accepted & Implemented
+- **Status**: Superseded by ADR-012 (V3.7.3-A)
 - **Date**: 2026-09-14 (V3.4/V3.6)
 - **Context**: Whisper models (e.g. `base`, `medium`) download large neural network weights. If stored in ephemeral media scratch, every worker restart or cleanup would re-download weights from HuggingFace.
-- **Decision**: Whisper weight downloads are directed to `WHISPER_CACHE_DIR` (defaulting to system user cache `~/.cache/whisper` or an explicit mount). Model loading is wrapped in thread-safe process-lifetime caching in `processing/transcriber.py`.
+- **Historical Decision**: Python Whisper model downloads were directed to `WHISPER_CACHE_DIR` and loaded once per process. This no longer describes the active transcription implementation.
 - **Rationale**: Eliminates redundant multi-gigabyte downloads on worker startup and ensures startup is offline-capable once pre-cached.
-- **Do Not Change Unless**: Moving to a dedicated external speech-to-text API service.
+- **Superseded**: V3.7.3-A replaced Python `openai-whisper` with the local whisper.cpp CLI and an operator-provisioned model file.
+
+---
+
+### ADR-012: Local whisper.cpp CLI with Explicit Multilingual Base Model
+
+- **Status**: Accepted & Implemented (V3.7.3-A)
+- **Date**: 2026-11-01
+- **Decision**: Transcription invokes `whisper-cli` with the configured multilingual `ggml-base.bin`. ReelForge does not download, substitute, or use a cloud transcription model. FFmpeg prepares 16 kHz mono signed 16-bit PCM WAV in a unique temporary directory.
+- **Rationale**: Removes the Python Whisper runtime while preserving a local, zero-inference-charge transcription path and the existing `transcribe_reel(video_path) -> str` pipeline contract.
+- **Operational Requirement**: Configure `WHISPER_CPP_BIN` and `WHISPER_CPP_MODEL_PATH`, and set thread/timeout limits. The default V3.7.3-B Docker image builds the CPU CLI at pinned official commit `d1be6fde11ac6e0407606b4e42fe72d34add8037` and bundles the model after SHA-1 verification; the `runtime-base` target supports an externally mounted model.
 
 ---
 
@@ -149,3 +160,12 @@
   3. Provide a lightweight preflight probe `check_vision_gateway()` accessible via CLI (`--check-gateway`) to verify remote connectivity and authentication without expensive video processing or frame extraction.
 - **Rationale**: Allows operators to decouple vision model infrastructure from text LLMs with zero code changes, while providing immediate operational observability when configuring cloud workers.
 - **Revisit When**: Moving to a unified API gateway orchestration layer that abstracts multimodal routing behind a single endpoint.
+
+---
+
+### ADR-012: Fixed OpenRouter Free Route for Text and Vision
+
+- **Status**: Accepted for V3.7.1 + V3.7.2 implementation
+- **Date**: 2026-11-01
+- **Decision**: Route text generation, evaluation, and image-based vision through `https://openrouter.ai/api/v1/chat/completions` using the fixed `openrouter/free` model and `OPENROUTER_API_KEY`. Do not expose model/provider/endpoint overrides or paid fallbacks. Keep transcription local through whisper.cpp.
+- **Rationale**: A single constrained route provides consistent text/vision integration while protecting the strict zero-inference-spend requirement from accidental configuration fallback. Free routing availability and rate limits are external constraints; no paid route is used when unavailable.

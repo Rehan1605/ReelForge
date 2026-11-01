@@ -13,9 +13,9 @@ Short-form videos contain high-value knowledge—coding roadmaps, recipes, worko
 ReelForge structures this knowledge:
 
 1. **Ingests** an Instagram Reel via Telegram or CLI.
-2. **Transcribes** audio offline using local OpenAI Whisper.
-3. **Analyzes visual frames** (on-screen text, visible tools, UI code, demonstration steps) via OmniRoute (`VISION_MODEL`).
-4. **Classifies** the content domain using OmniRoute (`TEXT_MODEL`).
+2. **Transcribes** audio offline using the local whisper.cpp CLI.
+3. **Analyzes visual frames** (on-screen text, visible tools, UI code, demonstration steps) through OpenRouter's fixed `openrouter/free` route.
+4. **Classifies** and extracts the content domain through the same fixed OpenRouter route.
 5. **Extracts domain-specific structured knowledge** combining caption, transcript, and visual observations.
 6. **Constructs an Atomic Brain Object** (persisted locally as JSON with provenance metadata).
 7. **Publishes** a styled note directly into the appropriate OneNote category section via Microsoft Graph API.
@@ -56,7 +56,7 @@ Instagram Reel URL
         └──────────────► Vision Analyzer (Frame Sampling & Analysis)
                              │
                              ▼
-                         OmniRoute Gateway (VISION_MODEL)
+                         OpenRouter (`openrouter/free`)
                              │
                              ▼
                       Vision Analysis
@@ -64,7 +64,7 @@ Instagram Reel URL
 Caption + Transcript + Vision Analysis
                              │
                              ▼
-                       Categorizer (OmniRoute TEXT_MODEL)
+                       Categorizer (OpenRouter `openrouter/free`)
                              │
                              ▼
                    Category-Specific Extractor
@@ -201,11 +201,7 @@ Edit `.env`:
 ```env
 TELEGRAM_BOT_TOKEN=your_telegram_bot_token_here
 MICROSOFT_CLIENT_ID=your_microsoft_azure_app_client_id_here
-OMNIROUTE_BASE_URL=http://localhost:20128/v1
-OMNIROUTE_API_KEY=your_optional_omniroute_key
-TEXT_MODEL=gemini/gemini-3.1-flash-lite
-EVALUATION_MODEL=gemini/gemini-3.1-flash-lite
-VISION_MODEL=gemini/gemini-3.1-flash-lite
+OPENROUTER_API_KEY=your_openrouter_api_key
 VISION_MAX_FRAMES=8
 ```
 

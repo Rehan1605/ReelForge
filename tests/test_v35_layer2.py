@@ -233,6 +233,13 @@ class TestNotificationText(unittest.TestCase):
         text = result_summary_text(result, "fresh")
         self.assertNotIn("ACCESS_SUPER_SECRET", text)
 
+    def test_result_summary_warns_when_vision_is_degraded(self):
+        result = _ok_result()
+        result["vision_status"] = "degraded"
+        text = result_summary_text(result, "fresh")
+        self.assertIn("Visual analysis was unavailable", text)
+        self.assertIn("remaining available information", text)
+
     def test_worker_notifier_holds_no_credentials(self):
         with _RunningLoop() as loop:
             notifier = JobNotifier(bot=object(), loop=loop, chats=[1], kind="fresh")

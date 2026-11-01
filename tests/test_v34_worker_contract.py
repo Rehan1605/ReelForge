@@ -22,12 +22,14 @@ BOT = ROOT / "bot" / "telegram_bot.py"
 _ALLOWED_CONCRETE_VALUES = {
     "8080",
     "8",
+    "2",
+    "300",
+    "whisper-cli",
     "common",
     "127.0.0.1",
     "reelforge",
     "http://localhost:8080",
     "http://localhost:8080/auth/callback",
-    "http://localhost:20128/v1",
     "https://login.microsoftonline.com/common",
 }
 
@@ -35,10 +37,8 @@ _SECRET_KEYS = {
     "TELEGRAM_BOT_TOKEN",
     "MICROSOFT_CLIENT_ID",
     "MONGODB_URI",
-    "OMNIROUTE_API_KEY",
-    "VISION_API_KEY",
+    "OPENROUTER_API_KEY",
     "OAUTH_STATE_SECRET",
-    "OPENAI_API_KEY",
 }
 
 # Only these two are hard-required at import time (_required_env).
@@ -121,8 +121,8 @@ class TestWorkerOperationsDoc(unittest.TestCase):
             "TELEGRAM_BOT_TOKEN",
             "MICROSOFT_CLIENT_ID",
             "MONGODB_URI",
-            "OMNIROUTE_BASE_URL",
-            "WHISPER_CACHE_DIR",
+            "OPENROUTER_API_KEY",
+            "WHISPER_CPP_MODEL_PATH",
             "FFMPEG_PATH",
             "WORKSPACE_DIR",
             "BRAINS_DIR",

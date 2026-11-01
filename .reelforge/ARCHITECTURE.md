@@ -41,7 +41,7 @@ ReelForge is a multimodal knowledge extraction and automated personal knowledge 
 |         v                        v                         v                   |
 |  +--------------+         +--------------+          +------------------+       |
 |  | Downloader   |         | Transcriber  |          | Vision Analyzer  |       |
-|  | (yt-dlp)     |         | (Whisper)    |          | (OmniRoute LLM)  |       |
+|  | (yt-dlp)     |         | (whisper.cpp)|          | (OmniRoute LLM)  |       |
 |  +--------------+         +--------------+          +------------------+       |
 |         |                        |                         |                   |
 |         +------------------------+-------------------------+                   |
@@ -75,12 +75,14 @@ ReelForge is a multimodal knowledge extraction and automated personal knowledge 
 - **`download/downloader.py`**:
   - Utilizes `yt-dlp` to download video MP4 files, extract metadata (`*.info.json`), and download thumbnails into `effective_workspace()`.
 - **`processing/transcriber.py`**:
-  - Transcribes audio using OpenAI Whisper.
-  - Weights are cached on a persistent volume via `WHISPER_CACHE_DIR`.
-  - Process-lifetime model caching ensures models are loaded into RAM once per worker process.
+  - Converts each Reel's audio to mono 16 kHz signed 16-bit PCM WAV with FFmpeg.
+  - Executes the local whisper.cpp `whisper-cli` using the explicitly provisioned multilingual `ggml-base.bin` model.
+  - Uses isolated temporary files per call; no model download or cloud transcription provider is used.
+  - The worker startup validates `whisper-cli`, the readable multilingual Base model, and FFmpeg before processing. Each CLI invocation loads its own model instance; concurrency multiplies model memory and thread use.
+  - The default Docker runtime builds pinned CPU whisper.cpp, bundles the Base model after checksum verification, and keeps compiler tools out of the final image. A no-model target supports persistent external model mounts.
 - **`processing/vision_analyzer.py`**:
   - Extracts key representative video frames using OpenCV / FFmpeg.
-  - Sends base64-encoded frames alongside transcript and caption to the OmniRoute vision gateway (`VISION_MODEL`).
+  - Sends base64-encoded frames alongside transcript and caption to OpenRouter's fixed `openrouter/free` model through the shared chat-completions transport.
   - Generates visual observations, on-screen text (OCR), code snippets, and UI details.
 - **`processing/categorizer.py` & Domain Extractors**:
   - Classifies content into predefined domains: *Programming*, *AI*, *Finance*, *Food*, *Gym*, *Productivity*, *Travel*, *Photography*, *Movies/Edits*, *Other*.
@@ -88,6 +90,10 @@ ReelForge is a multimodal knowledge extraction and automated personal knowledge 
 - **`processing/pipeline.py` (`process_reel`)**:
   - The central orchestrator uniting download, transcription, vision, categorization, extraction, Brain Object creation, and OneNote publication.
   - Enforces automatic post-processing media cleanup (`_cleanup_reel_media()`) when `KEEP_VIDEOS=False`.
+  - Reports degraded visual analysis in the user result when OpenRouter vision processing fails; the pipeline may continue using saved vision data if available.
+- **`processing/openrouter_gateway.py`**:
+  - Restricts remote inference to `https://openrouter.ai/api/v1/chat/completions` and `openrouter/free`; all text, evaluation and image requests use `OPENROUTER_API_KEY`.
+  - Uses bounded retries and sanitized errors. No alternate provider or paid model fallback is configured.
 
 ### 2.3 Worker Runtime & Ephemeral Workspace Isolation (`processing/worker_workspace.py`)
 - Standalone worker processes (`python -m processing.worker`) automatically initialize a private directory under `WORKSPACE_DIR/workers/w-<pid>-<random_hex>/`.

@@ -277,6 +277,60 @@ class CacheFallbackLifecycleTests(unittest.TestCase):
         self.assertEqual(Path(result["brain_path"]), expected_path)
         self.assertFalse(expected_path.exists())
 
+    def test_transcription_failure_keeps_pipeline_contract_and_empty_transcript(self):
+        from processing import pipeline
+
+        brain = _valid_brain("AbC123", user_id="usr_test")
+        brain["media"]["video_path"] = "mock-video.mp4"
+        with mock.patch.object(pipeline, "get_cached_brain_object", return_value=None), \
+             mock.patch.object(pipeline, "acquire_reel", return_value=brain), \
+             mock.patch("processing.transcriber.transcribe_reel", side_effect=RuntimeError("mock failure")), \
+             mock.patch("processing.vision_analyzer.analyze_vision", return_value=None), \
+             mock.patch("processing.categorizer.categorize", return_value="Programming") as categorize, \
+             mock.patch("processing.dispatcher.dispatch", return_value={"summary": "summary"}), \
+             mock.patch.object(pipeline, "update_category", return_value=brain), \
+             mock.patch.object(pipeline, "update_knowledge", return_value=brain), \
+             mock.patch.object(pipeline, "update_provenance", return_value=brain), \
+             mock.patch.object(pipeline, "compute_provenance", return_value={}), \
+             mock.patch.object(pipeline, "load_brain_object", return_value=brain), \
+             mock.patch("onenote.writer.OneNoteWriter") as writer, \
+             mock.patch("storage.user.update_user_stats"), \
+             mock.patch.object(pipeline, "_cleanup_reel_media"):
+            writer.return_value.write.return_value = None
+            result = pipeline.process_reel(
+                "https://www.instagram.com/reel/AbC123/", user_id="usr_test"
+            )
+
+        self.assertTrue(result["success"])
+        self.assertEqual(result["transcript"], "")
+        categorize.assert_called_once_with("A caption", "")
+
+    def test_vision_failure_is_reported_as_degraded_without_failing_pipeline(self):
+        from processing import pipeline
+
+        brain = _valid_brain("AbC123", user_id="usr_test")
+        brain["media"]["video_path"] = "mock-video.mp4"
+        with mock.patch.object(pipeline, "get_cached_brain_object", return_value=None), \
+             mock.patch.object(pipeline, "acquire_reel", return_value=brain), \
+             mock.patch("processing.transcriber.transcribe_reel", return_value="spoken words"), \
+             mock.patch("processing.vision_analyzer.analyze_vision", side_effect=RuntimeError("provider unavailable")), \
+             mock.patch("processing.categorizer.categorize", return_value="Programming"), \
+             mock.patch("processing.dispatcher.dispatch", return_value={"summary": "summary"}), \
+             mock.patch.object(pipeline, "update_category", return_value=brain), \
+             mock.patch.object(pipeline, "update_knowledge", return_value=brain), \
+             mock.patch.object(pipeline, "update_provenance", return_value=brain), \
+             mock.patch.object(pipeline, "compute_provenance", return_value={}), \
+             mock.patch.object(pipeline, "load_brain_object", return_value=brain), \
+             mock.patch("onenote.writer.OneNoteWriter"), \
+             mock.patch("storage.user.update_user_stats"), \
+             mock.patch.object(pipeline, "_cleanup_reel_media"):
+            result = pipeline.process_reel(
+                "https://www.instagram.com/reel/AbC123/", user_id="usr_test"
+            )
+
+        self.assertTrue(result["success"])
+        self.assertEqual(result["vision_status"], "degraded")
+
 
 class VisionTempLifecycleTests(unittest.TestCase):
     """Vision frame dirs (system temp) are cleaned on failure AND success."""

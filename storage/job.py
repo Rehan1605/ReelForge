@@ -37,6 +37,7 @@ from storage.db import ensure_job_indexes, get_collection
 JOB_TYPE_REEL = "reel"
 JOB_TYPE_FORCE = "force"
 JOB_TYPE_REPROCESS = "reprocess"
+JOB_TYPE_PUBLICATION = "publication"
 
 STATUS_QUEUED = "queued"
 STATUS_PROCESSING = "processing"
@@ -109,6 +110,7 @@ def new_job(
         "reel_id": reel_id,
         "user_id": user_id,
         "requested_by": [user_id] if user_id else [],
+        "requesters_version": 0,
         "chats": [chat_id] if chat_id is not None else [],
         "force": bool(force),
         "status": STATUS_QUEUED,
@@ -163,37 +165,44 @@ def submit_job(
         now=now,
     )
 
-    try:
-        col.insert_one(doc)
-        return doc, False
-    except DuplicateKeyError:
-        existing = col.find_one({"claim_key": claim_key, "active": True})
-        if existing is None:
+    # A duplicate submit can race with the worker completing the active job.
+    # Attach requesters only while it is still active; if it became terminal,
+    # retry insertion so the new request receives its own durable job.
+    for _ in range(3):
+        try:
             col.insert_one(doc)
             return doc, False
-        if user_id and user_id not in (existing.get("requested_by") or []):
-            col.update_one(
-                {"_id": existing["_id"]},
-                {
-                    "$addToSet": {"requested_by": user_id},
-                    "$set": {"timestamps.updated_at": now or now_utc()},
-                },
+        except DuplicateKeyError:
+            existing = col.find_one({"claim_key": claim_key, "active": True})
+            if existing is None:
+                continue
+
+            update: dict = {"$set": {"timestamps.updated_at": now or now_utc()}}
+            add_to_set = {}
+            if user_id:
+                add_to_set["requested_by"] = user_id
+            if chat_id is not None:
+                add_to_set["chats"] = chat_id
+            if add_to_set:
+                update["$addToSet"] = add_to_set
+            # A monotonic audience revision lets the worker detect a requester
+            # attached after its claim snapshot and before terminal completion.
+            if user_id and user_id not in (existing.get("requested_by") or []):
+                update["$inc"] = {"requesters_version": 1}
+            if force and not existing.get("force"):
+                update["$set"]["force"] = True
+
+            merged_update = col.update_one(
+                {"_id": existing["_id"], "active": True}, update
             )
-        if chat_id is not None and chat_id not in (existing.get("chats") or []):
-            col.update_one(
-                {"_id": existing["_id"]},
-                {
-                    "$addToSet": {"chats": chat_id},
-                    "$set": {"timestamps.updated_at": now or now_utc()},
-                },
-            )
-        if force and not existing.get("force"):
-            col.update_one(
-                {"_id": existing["_id"]},
-                {"$set": {"force": True, "timestamps.updated_at": now or now_utc()}},
-            )
-        merged = col.find_one({"_id": existing["_id"]}) or existing
-        return merged, True
+            if (merged_update.matched_count or 0) == 0:
+                continue
+            merged = col.find_one({"_id": existing["_id"]}) or existing
+            return merged, True
+
+    # A rapidly transitioning job exhausted the retries. Fail closed instead
+    # of acknowledging a request that was not durably attached to a job.
+    raise RuntimeError("Could not attach request to an active Reel job; please retry.")
 
 
 def get_job(job_id: str, col=None) -> dict | None:
@@ -262,7 +271,7 @@ def claim_next_job(
                 "timestamps.updated_at": now,
                 "lease.expires_at": now + timedelta(seconds=LEASE_TTL_SECONDS),
             },
-            "$inc": {"attempts": 1},
+            "$inc": {"attempts": 1, "requesters_version": 1},
         },
         sort=[("timestamps.created_at", 1)],
         return_document=pymongo.ReturnDocument.AFTER,
@@ -310,12 +319,16 @@ def complete_job(
     result: dict | None = None,
     col=None,
     now: datetime | None = None,
+    expected_requesters_version: int | None = None,
 ) -> bool:
     """Move a processing job to ``completed`` (terminal)."""
     now = now or now_utc()
     col = _col_or_default(col)
+    query = {"_id": job_id, "status": STATUS_PROCESSING}
+    if expected_requesters_version is not None:
+        query["requesters_version"] = expected_requesters_version
     res = col.update_one(
-        {"_id": job_id, "status": STATUS_PROCESSING},
+        query,
         {
             "$set": {
                 "status": STATUS_COMPLETED,
@@ -435,7 +448,7 @@ def list_jobs(
 def summarize_result(result: dict) -> dict:
     """Small projection of a pipeline result dict stored on the job."""
     brain = result.get("brain") or {}
-    return {
+    summary = {
         "success": bool(result.get("success")),
         "cached": bool(result.get("cached")),
         "onenote_success": bool(result.get("onenote_success")),
@@ -444,3 +457,8 @@ def summarize_result(result: dict) -> dict:
         "reel_id": brain.get("id"),
         "error": result.get("error"),
     }
+    # Older pipeline results and stored jobs do not have this optional field.
+    # Preserve that shape while persisting it whenever the pipeline reports it.
+    if "vision_status" in result:
+        summary["vision_status"] = result.get("vision_status")
+    return summary

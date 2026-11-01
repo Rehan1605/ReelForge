@@ -9,7 +9,7 @@ Verifies the full isolation contract introduced in V3.6 Layer 2:
   - Every pipeline component (downloader, transcriber, vision, cleanup) resolves
     the same workspace within a process.
   - BRAINS_DIR remains shared/persistent and is never inside the worker workspace.
-  - WHISPER_CACHE_DIR is independent of workspace isolation.
+  - The configured whisper.cpp model is independent of workspace isolation.
   - Embedded mode (single-process local dev) keeps the flat WORKSPACE_DIR.
   - Standalone worker mode activates isolation automatically.
   - A fresh / empty filesystem (Docker) is fully supported.
@@ -540,39 +540,38 @@ class BrainsDirIsolationTests(WorkspaceTestBase):
 
 
 # ===========================================================================
-# 9. Whisper cache is independent of worker workspace isolation
+# 9. Configured whisper.cpp model is independent of worker workspace isolation
 # ===========================================================================
 
-class WhisperCacheIsolationTests(WorkspaceTestBase):
-    """WHISPER_CACHE_DIR must not be derived from the worker workspace."""
+class WhisperCppModelIsolationTests(WorkspaceTestBase):
+    """The configured whisper.cpp model is independent of worker workspace."""
 
-    def test_whisper_cache_dir_not_inside_worker_workspace(self):
+    def test_model_path_not_inside_worker_workspace(self):
         """
-        WHISPER_CACHE_DIR defaults to None (→ ~/.cache/whisper) or an explicit
-        absolute path. Either way it must not be inside the worker workspace.
+        An explicitly configured model artifact must not be inside ephemeral media.
         """
-        from config import WHISPER_CACHE_DIR
+        from config import WHISPER_CPP_MODEL_PATH
         with tempfile.TemporaryDirectory() as tmp:
             with patch("processing.worker_workspace.WORKSPACE_DIR", tmp):
                 ww.activate_worker_workspace()
                 ws = ww.effective_workspace()
 
-        if WHISPER_CACHE_DIR:
-            cache_path = Path(WHISPER_CACHE_DIR).resolve()
+        if WHISPER_CPP_MODEL_PATH:
+            cache_path = Path(WHISPER_CPP_MODEL_PATH).resolve()
             ws_resolved = ws.resolve()
             self.assertFalse(
                 str(cache_path).startswith(str(ws_resolved)),
-                f"WHISPER_CACHE_DIR {cache_path} is inside worker workspace {ws_resolved}",
+                f"WHISPER_CPP_MODEL_PATH {cache_path} is inside worker workspace {ws_resolved}",
             )
-        # If WHISPER_CACHE_DIR is None it uses ~/.cache/whisper — definitely separate.
+        # An unset model path is validated by the transcriber at call time.
 
-    def test_transcriber_uses_effective_workspace_not_whisper_cache(self):
-        """transcribe_latest_reel() globs for mp4 in effective_workspace, not cache."""
+    def test_transcriber_uses_effective_workspace_for_media(self):
+        """transcribe_latest_reel() globs for mp4 in effective_workspace."""
         import processing.transcriber as tr
         import inspect
         source = inspect.getsource(tr.transcribe_latest_reel)
         self.assertIn("effective_workspace", source)
-        self.assertNotIn("WHISPER_CACHE_DIR", source)
+        self.assertNotIn("WHISPER_CPP_MODEL_PATH", source)
 
 
 # ===========================================================================
@@ -588,19 +587,15 @@ class TranscriberWorkspaceTests(WorkspaceTestBase):
                 ws = ww.activate_worker_workspace()
                 (ws / "test_reel.mp4").touch()
 
-                fake_result = {"text": "hello world"}
-
-                def fake_transcribe(path):
-                    return fake_result
-
                 with patch("processing.transcriber.effective_workspace",
                            return_value=ws):
-                    with patch("processing.transcriber._get_model") as mock_model:
-                        mock_model.return_value.transcribe.return_value = fake_result
+                    with patch("processing.transcriber.transcribe_reel",
+                               return_value="hello world") as mock_transcribe:
                         transcript = __import__(
                             "processing.transcriber", fromlist=["transcribe_latest_reel"]
                         ).transcribe_latest_reel()
                         self.assertEqual(transcript, "hello world")
+                        mock_transcribe.assert_called_once_with(ws / "test_reel.mp4")
 
     def test_transcriber_source_references_effective_workspace(self):
         import processing.transcriber as tr

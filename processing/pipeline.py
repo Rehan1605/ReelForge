@@ -103,6 +103,7 @@ def process_reel(url, progress_callback=None, force=False, user_id: str | None =
                     "transcript": transcript,
                     "category": category,
                     "knowledge": knowledge,
+                    "vision_status": "cached",
                     "error": None,
                 }
 
@@ -137,6 +138,7 @@ def process_reel(url, progress_callback=None, force=False, user_id: str | None =
         from processing.vision_analyzer import analyze_vision
 
         vision_analysis = None
+        vision_status = "complete"
         try:
             _notify(progress_callback, "Analyzing Video Frames")
             print(f"Starting vision analysis for reel {reel_id}...")
@@ -149,6 +151,7 @@ def process_reel(url, progress_callback=None, force=False, user_id: str | None =
             )
             print("Vision analysis complete.")
         except Exception as e:
+            vision_status = "degraded"
             print(f"Vision Analysis Failed (proceeding without vision): {e}")
             if reel_id:
                 try:
@@ -266,6 +269,7 @@ def process_reel(url, progress_callback=None, force=False, user_id: str | None =
             "transcript": transcript,
             "category": category,
             "knowledge": knowledge,
+            "vision_status": vision_status,
             "error": None,
         }
 

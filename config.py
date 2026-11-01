@@ -74,19 +74,20 @@ def _default_ffmpeg_path() -> str:
 
 FFMPEG_PATH = os.getenv("FFMPEG_PATH", _default_ffmpeg_path()).strip()
 
-TEXT_MODEL = os.getenv("TEXT_MODEL", "qwen2.5:7b-instruct")
-EVALUATION_MODEL = os.getenv("EVALUATION_MODEL", TEXT_MODEL)
-VISION_MODEL = os.getenv("VISION_MODEL", "llama3.2-vision:latest")
-# AI gateway routing: explicit OMNIROUTE_BASE_URL wins, then OPENAI_BASE_URL
-# fallback, then the current local OmniRoute default. This lets the gateway be
-# hosted anywhere (env config only) while keeping local development unchanged.
-OMNIROUTE_BASE_URL = (os.getenv("OMNIROUTE_BASE_URL") or os.getenv("OPENAI_BASE_URL") or "http://localhost:20128/v1")
-# Remote gateways may require an API key; keys come only from the environment.
-OMNIROUTE_API_KEY = (os.getenv("OMNIROUTE_API_KEY") or os.getenv("OPENAI_API_KEY") or "").strip()
-# Optional dedicated vision gateway overrides.
-# If unset, vision analysis falls back to OMNIROUTE_BASE_URL and OMNIROUTE_API_KEY.
-VISION_BASE_URL = os.getenv("VISION_BASE_URL", "").strip()
-VISION_API_KEY = os.getenv("VISION_API_KEY", "").strip()
+# Fixed, shared remote AI route. Endpoint and model are intentionally not
+# environment-configurable so text and vision cannot drift to a paid provider.
+OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+OPENROUTER_MODEL = "openrouter/free"
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "").strip()
+
+
+def require_openrouter_api_key() -> str:
+    """Return the configured key or fail before making a remote AI request."""
+    if not OPENROUTER_API_KEY:
+        raise RuntimeError("OPENROUTER_API_KEY is required for remote AI inference")
+    return OPENROUTER_API_KEY
+
+
 VISION_MAX_FRAMES = int(os.getenv("VISION_MAX_FRAMES", "8"))
 
 WORKSPACE_DIR = os.getenv("WORKSPACE_DIR", str(ROOT_DIR / "reels")).strip()
@@ -114,10 +115,12 @@ REELFORGE_START_OAUTH_SERVER = os.getenv("REELFORGE_START_OAUTH_SERVER", "0").st
 )
 
 
-WHISPER_MODEL = os.getenv("WHISPER_MODEL", "base").strip()
-WHISPER_CACHE_DIR = os.getenv("WHISPER_CACHE_DIR", "").strip() or None
-
-OLLAMA_MODEL = "llama3.2-vision"
+WHISPER_CPP_BIN = os.getenv("WHISPER_CPP_BIN", "whisper-cli").strip() or "whisper-cli"
+# Required at transcription time; the multilingual ggml-base.bin is supplied
+# by deployment and is never downloaded or silently replaced by the application.
+WHISPER_CPP_MODEL_PATH = os.getenv("WHISPER_CPP_MODEL_PATH", "").strip()
+WHISPER_CPP_THREADS = int(os.getenv("WHISPER_CPP_THREADS", "2"))
+WHISPER_CPP_TIMEOUT = int(os.getenv("WHISPER_CPP_TIMEOUT", "300"))
 
 CATEGORIES = [
     "Programming",

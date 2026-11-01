@@ -26,6 +26,14 @@ preview.html
 
 # Local-only tests and helper scripts (not part of the runtime image)
 scratch/
+tests/
+docs/
+.reelforge/
+AGENTS.md
+README.md
+WORKER_OPERATIONS.md
+WORKER.env.example
+.env.example
 
 # OS / editor artifacts
 .DS_Store

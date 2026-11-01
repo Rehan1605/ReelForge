@@ -52,7 +52,6 @@ class OneNoteWriter:
         """
         self.user_id = user_id
         self.client = GraphClient(user_id=user_id) if user_id else GraphClient()
-        self.client.authenticate()
 
     def _notebook_name(self):
         if not self.user_id:
@@ -159,47 +158,54 @@ class OneNoteWriter:
                 return _replay_publication(record)
 
             # We own the slot: create a fresh page (first publish or force).
-            category = brain["knowledge"]["category"]
-            title = self._page_title(brain)
-            section = self.get_section_for_category(category)
-            section_name = CATEGORY_SECTIONS.get(category)
-
-            # Check for local thumbnail file
-            media = brain.get("media") or {}
-            thumbnail_path = media.get("thumbnail_path")
-            has_thumbnail = bool(thumbnail_path and os.path.isfile(thumbnail_path) and os.path.getsize(thumbnail_path) > 0)
-
-            html_content = format_brain_object(brain, include_thumbnail=has_thumbnail)
-
+            # Authenticate after claiming so unconnected users also receive a
+            # durable failed publication record that can be retried after /connect.
             try:
+                authenticate = getattr(self.client, "authenticate", None)
+                if authenticate is not None:
+                    authenticate()
+                category = brain["knowledge"]["category"]
+                title = self._page_title(brain)
+                section = self.get_section_for_category(category)
+                section_name = CATEGORY_SECTIONS.get(category)
+
+                # Check for local thumbnail file
+                media = brain.get("media") or {}
+                thumbnail_path = media.get("thumbnail_path")
+                has_thumbnail = bool(
+                    thumbnail_path
+                    and os.path.isfile(thumbnail_path)
+                    and os.path.getsize(thumbnail_path) > 0
+                )
+
+                html_content = format_brain_object(brain, include_thumbnail=has_thumbnail)
                 response = self.client.create_page(
                     section["id"],
                     title,
                     html_content,
                     thumbnail_path=thumbnail_path if has_thumbnail else None,
                 )
+                links = response.get("links") or {}
+                page_url = (links.get("oneNoteWebUrl") or {}).get("href")
+
+                complete_publication(
+                    reel_id, self.user_id, claim["record"].get("owner_token"),
+                    {
+                        "page_id": response.get("id"),
+                        "page_url": page_url,
+                        "section_id": section.get("id"),
+                        "section_name": section_name,
+                        "notebook_name": self._notebook_name(),
+                        "title": title,
+                    },
+                    col=col,
+                )
             except Exception as e:
                 fail_publication_slot(
                     reel_id, self.user_id, claim["record"].get("owner_token"),
-                    str(e) or "OneNote page creation failed", col=col,
+                    str(e) or "OneNote publication failed", col=col,
                 )
                 raise
-
-            links = response.get("links") or {}
-            page_url = (links.get("oneNoteWebUrl") or {}).get("href")
-
-            complete_publication(
-                reel_id, self.user_id, claim["record"].get("owner_token"),
-                {
-                    "page_id": response.get("id"),
-                    "page_url": page_url,
-                    "section_id": section.get("id"),
-                    "section_name": section_name,
-                    "notebook_name": self._notebook_name(),
-                    "title": title,
-                },
-                col=col,
-            )
 
             return response
         except Exception as e:

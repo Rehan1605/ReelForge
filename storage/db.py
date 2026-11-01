@@ -9,10 +9,15 @@ collection helpers, safe URI masking, and connectivity validation.
 
 from __future__ import annotations
 
+import ipaddress
+import os
 import re
+import sys
+from pathlib import Path
 from typing import TYPE_CHECKING
 from urllib.parse import urlsplit, urlunsplit
 
+import dns.resolver
 from pymongo import MongoClient
 from pymongo.collection import Collection
 from pymongo.database import Database
@@ -31,10 +36,89 @@ SERVER_SELECTION_TIMEOUT_MS = 5000
 CONNECT_TIMEOUT_MS = 5000
 SOCKET_TIMEOUT_MS = 10000
 
+# Bounded DNS lookup settings for SRV/TXT records on Termux.
+TERMUX_DNS_TIMEOUT_SECONDS = 2.0
+TERMUX_DNS_LIFETIME_SECONDS = 5.0
+
 # Legacy MongoDB-invalid compound multikey index(es) to remove on startup.
 # MongoDB forbids a single compound index spanning more than one array field
 # ("cannot index parallel arrays", code 171).
 LEGACY_INVALID_BRAIN_INDEXES = ("idx_user_library_active",)
+
+
+def _termux_prefix() -> str:
+    """Resolve the Termux installation prefix from the environment or Python."""
+    return os.environ.get("PREFIX") or sys.prefix
+
+
+def _is_android_termux() -> bool:
+    """Return whether this process is running from a Termux Python prefix."""
+    if not sys.platform.startswith("linux"):
+        return False
+
+    # Termux Python normally has PREFIX set. sys.prefix is a safe fallback for
+    # embedded launches where the shell environment may not have been sourced.
+    prefix = _termux_prefix()
+    normalized_prefix = prefix.replace("\\", "/").rstrip("/")
+    return normalized_prefix.endswith("/com.termux/files/usr")
+
+
+def _parse_termux_nameservers(contents: str) -> list[str]:
+    """Extract valid IPv4/IPv6 nameservers from resolv.conf text."""
+    nameservers: list[str] = []
+    for line in contents.splitlines():
+        entry = re.split(r"[#;]", line, maxsplit=1)[0].strip()
+        fields = entry.split()
+        if len(fields) != 2 or fields[0].lower() != "nameserver":
+            continue
+        try:
+            address = str(ipaddress.ip_address(fields[1]))
+        except ValueError:
+            continue
+        if address not in nameservers:
+            nameservers.append(address)
+    return nameservers
+
+
+def _configure_termux_dns() -> None:
+    """Install a dnspython resolver using Termux's resolver configuration."""
+    if not _is_android_termux():
+        return
+
+    prefix = _termux_prefix()
+    if not prefix:
+        raise RuntimeError(
+            "Termux DNS setup requires PREFIX or a Termux sys.prefix; "
+            "launch ReelForge from the Termux environment."
+        )
+
+    resolver_path = Path(prefix) / "etc" / "resolv.conf"
+    try:
+        contents = resolver_path.read_text(encoding="utf-8")
+    except (OSError, UnicodeError):
+        raise RuntimeError(
+            "Cannot read Termux DNS configuration at $PREFIX/etc/resolv.conf; "
+            "verify that PREFIX is set and the file is readable."
+        ) from None
+
+    nameservers = _parse_termux_nameservers(contents)
+    if not nameservers:
+        raise RuntimeError(
+            "No valid nameserver entries were found in $PREFIX/etc/resolv.conf; "
+            "ensure it contains at least one valid IPv4 or IPv6 nameserver."
+        )
+
+    try:
+        resolver = dns.resolver.Resolver(configure=False)
+        resolver.nameservers = nameservers
+        resolver.timeout = TERMUX_DNS_TIMEOUT_SECONDS
+        resolver.lifetime = TERMUX_DNS_LIFETIME_SECONDS
+        dns.resolver.default_resolver = resolver
+    except Exception:
+        raise RuntimeError(
+            "Could not initialize the Termux DNS resolver; verify dnspython and "
+            "the nameserver entries in $PREFIX/etc/resolv.conf."
+        ) from None
 
 
 def mask_mongo_uri(uri: str) -> str:
@@ -79,6 +163,7 @@ def get_mongo_client(uri: str | None = None, force_reconnect: bool = False) -> M
             except Exception:
                 pass
 
+        _configure_termux_dns()
         _client = MongoClient(
             target_uri,
             serverSelectionTimeoutMS=SERVER_SELECTION_TIMEOUT_MS,

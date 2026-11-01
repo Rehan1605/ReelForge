@@ -124,7 +124,9 @@ def result_summary_text(result, kind="fresh"):
     category = result.get("category") or "Unknown"
     reel_id = (result.get("brain") or {}).get("id")
 
-    if kind == "cached":
+    if kind == "publication" and result.get("onenote_success"):
+        status_line = "âœ… OneNote publication retry completed.\n\n"
+    elif kind == "cached":
         status_line = (
             "⚡ Already Processed (Cached Brain Object)\n"
             f"✅ OneNote Section: {category}\n\n"
@@ -153,6 +155,21 @@ def result_summary_text(result, kind="fresh"):
             f"{onenote_issue_message(result.get('onenote_error'))}\n\n"
         )
 
+    publication_counts = result.get("publications") or {}
+    if result.get("vision_status") == "degraded":
+        status_line += (
+            "⚠️ Visual analysis was unavailable for this run; saved vision analysis, if any, "
+            "was reused. The Reel was processed using the remaining available information.\n\n"
+        )
+
+    if publication_counts.get("failed") or publication_counts.get("pending"):
+        status_line += (
+            f"OneNote fan-out: {publication_counts.get('published', 0)} published, "
+            f"{publication_counts.get('failed', 0)} failed, "
+            f"{publication_counts.get('pending', 0)} pending. "
+            f"If your page is missing, connect with /connect and retry using /publish {reel_id or '<reel_id>'}.\n\n"
+        )
+
     return status_line + format_summary(result)
 
 
@@ -162,6 +179,7 @@ def notifier_kind_for_job(job: dict) -> str:
         "force": "force",
         "reprocess": "reprocess",
         "cached": "cached",
+        "publication": "publication",
     }.get(job.get("job_type"), "fresh")
 
 
