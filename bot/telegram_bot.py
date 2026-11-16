@@ -1272,19 +1272,25 @@ def run_bot():
                 kind=kind,
             )
 
-        _app.job_worker_task = loop.create_task(
+        task = loop.create_task(
             worker_loop(
                 make_notifier=make_notifier,
                 worker_id=f"bot-{os.getpid()}",
                 poll_interval=2.0,
             )
         )
+        _app.bot_data["job_worker_task"] = task
         return _app
 
     async def _stop_job_worker(_app):
-        task = getattr(_app, "job_worker_task", None)
+        task = _app.bot_data.get("job_worker_task") if hasattr(_app, "bot_data") else None
         if task is not None:
             task.cancel()
+            if isinstance(task, (asyncio.Task, asyncio.Future)):
+                try:
+                    await task
+                except (asyncio.CancelledError, Exception):
+                    pass
 
     async def _start_oauth_server_task(_app):
         import config
@@ -1298,7 +1304,7 @@ def run_bot():
 
         try:
             server = start_oauth_server()
-            _app.oauth_server = server
+            _app.bot_data["oauth_server"] = server
             print(
                 f"OAuth callback server: listening on http://{server.host}:{server.port}{server.path}"
             )
@@ -1308,7 +1314,8 @@ def run_bot():
     async def _stop_oauth_server_task(_app):
         try:
             stop_oauth_server()
-            _app.oauth_server = None
+            if hasattr(_app, "bot_data"):
+                _app.bot_data.pop("oauth_server", None)
             print("OAuth callback server: stopped.")
         except Exception as e:
             print(f"Notice: error stopping OAuth callback server: {e}")

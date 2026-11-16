@@ -47,3 +47,13 @@ This historical recovery context is retained so the DNS checkpoint does not eras
 - Added mocked phone diagnostics coverage for `8.8.8.8` and `8.8.4.4`, and verified dnspython's public `dns.resolver.resolve()` path delegates through the configured `default_resolver` without network access.
 - Focused DNS tests: 11 passed. Full V3 suite: 300 passed.
 - No live DNS or MongoDB calls were made.
+
+## Embedded Worker & OAuth Lifecycle Application AttributeError Fix
+
+- **Problem:** In `bot/telegram_bot.py`, `_start_job_worker()` crashed on startup with `AttributeError: 'Application' object has no attribute 'job_worker_task' and no __dict__ for setting new attributes` because python-telegram-bot v20+ implements `telegram.ext.Application` as a slotted class without `__dict__`. The same latent failure existed for `_app.oauth_server` in `_start_oauth_server_task()`.
+- **Implementation:** Replaced arbitrary attribute assignment on `_app` with python-telegram-bot's official slotted dictionary `_app.bot_data["job_worker_task"]` and `_app.bot_data["oauth_server"]`. Updated `_stop_job_worker()` to safely cancel and await the task, and `_stop_oauth_server_task()` to pop the key.
+- **Verification:**
+  - Added real slotted `Application` test `test_embedded_worker_lifecycle_with_slotted_application` in `tests/test_v35_layer2.py`.
+  - Focused suite: `python -m unittest tests.test_v35_layer2 tests.test_v36_oauth_lifecycle tests.test_v373_runtime_packaging` — 53 passed.
+  - Full V3 suite: `python -m unittest discover -s tests -p "test_v3*.py"` — 305/305 passed (0 failures, 0 errors in 10.958s).
+  - No database records, `.env`, or credentials modified. No commits or pushes performed.

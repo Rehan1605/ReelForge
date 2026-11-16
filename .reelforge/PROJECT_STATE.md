@@ -87,9 +87,10 @@ Prior V3 suites were verified on 2026-11-01. Current task verification:
 - **Full V3 suite before prefix-fallback correction**: `python -m unittest discover -s tests -p "test_v3*.py"` — **296/296 passed** (0 failures, 0 errors; 36.378s).
 - **After Android platform/path parsing correction**: `python -m unittest tests.test_v34_termux_dns` — **11/11 passed**; full V3 suite — **300/300 passed**.
 - **OpenRouter response validation**: `python -m unittest tests.test_v34_ai_gateway tests.test_v36_vision_remote` — **14/14 passed**; `python -m unittest discover -s tests -p "test_v3*.py"` — **304/304 passed**.
+- **Embedded Worker & OAuth Application.bot_data lifecycle**: `tests/test_v35_layer2.py` (22 passed), `tests/test_v36_oauth_lifecycle.py` (14 passed), `tests/test_v373_runtime_packaging.py` (17 passed); full V3 suite `python -m unittest discover -s tests -p "test_v3*.py"` — **305/305 passed**.
 
 > **Test Tracking Status**:
-> The active V3 regression suite is discovered by `python -m unittest discover -s tests -p "test_v3*.py"`. Its count changed from the historical 300 at the V3.7.3-B checkpoint to 285 after replacing legacy configurable-gateway contract coverage during the OpenRouter migration. Later integration, Termux DNS, and OpenRouter response-validation coverage brings the current result to 304. Exploratory and manual verification scripts remain in `scratch/`.
+> The active V3 regression suite is discovered by `python -m unittest discover -s tests -p "test_v3*.py"`. Its count changed from the historical 300 at the V3.7.3-B checkpoint to 285 after replacing legacy configurable-gateway contract coverage during the OpenRouter migration. Later integration, Termux DNS, OpenRouter response-validation coverage, and the slotted Application lifecycle regression test brings the current result to 305. Exploratory and manual verification scripts remain in `scratch/`.
 
 ---
 

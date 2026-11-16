@@ -112,6 +112,61 @@ class TestEmbeddedWorkerToggle(unittest.TestCase):
         ab.post_shutdown.assert_not_called()
         self.assertTrue(app.add_handler.called, "handlers must still be registered")
 
+    def test_embedded_worker_lifecycle_with_slotted_application(self):
+        """Regression: verify worker and OAuth lifecycle hooks execute on real slotted Application."""
+        import telegram.ext
+        import config
+        import auth.oauth_server as osrv
+
+        self.addCleanup(osrv.stop_oauth_server)
+
+        captured_post_init = None
+        captured_post_shutdown = None
+
+        def mock_post_init(builder_self, fn):
+            nonlocal captured_post_init
+            captured_post_init = fn
+            return builder_self
+
+        def mock_post_shutdown(builder_self, fn):
+            nonlocal captured_post_shutdown
+            captured_post_shutdown = fn
+            return builder_self
+
+        with (
+            patch.object(telegram.ext.ApplicationBuilder, "post_init", mock_post_init),
+            patch.object(telegram.ext.ApplicationBuilder, "post_shutdown", mock_post_shutdown),
+            patch.object(telegram.ext.Application, "run_polling", lambda self: None),
+            patch.object(tb, "REELFORGE_EMBEDDED_WORKER", True),
+            patch.object(tb, "REELFORGE_START_OAUTH_SERVER", True),
+            patch.object(config, "OAUTH_STATE_SECRET", "test-secret-min-32-chars-long-here!"),
+            patch.object(config, "OAUTH_HOST", "127.0.0.1"),
+            patch.object(config, "OAUTH_LISTEN_PORT", 0),
+            patch.object(tb, "validate_worker_runtime", return_value=True),
+            patch.object(tb, "worker_loop", AsyncMock(side_effect=asyncio.CancelledError)),
+        ):
+            tb.run_bot()
+
+            self.assertIsNotNone(captured_post_init)
+            self.assertIsNotNone(captured_post_shutdown)
+
+            # Build a real slotted python-telegram-bot Application instance (has no __dict__)
+            real_app = telegram.ext.ApplicationBuilder().token("123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11").build()
+            self.assertFalse(hasattr(real_app, "__dict__"))
+            self.assertIsInstance(real_app.bot_data, dict)
+
+            # post_init must succeed without AttributeError
+            asyncio.run(captured_post_init(real_app))
+            self.assertIn("job_worker_task", real_app.bot_data)
+            self.assertIn("oauth_server", real_app.bot_data)
+            worker_task = real_app.bot_data["job_worker_task"]
+            self.assertIsInstance(worker_task, asyncio.Task)
+
+            # post_shutdown must cancel the worker task and clear oauth_server without AttributeError
+            asyncio.run(captured_post_shutdown(real_app))
+            self.assertTrue(worker_task.cancelled())
+            self.assertNotIn("oauth_server", real_app.bot_data)
+
     def test_receive_enqueues_without_worker(self):
         # The bot path only writes to MongoDB; no worker task is required to
         # accept and acknowledge a reel request.
