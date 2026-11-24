@@ -2,9 +2,9 @@
 
 > **Current as of**: 2026-11-01
 > **Branch**: `main` (latest observed committed HEAD `8f1f4fd`; synchronized with `origin/main` before this follow-up)
-> **Current Version**: V3.7.4 Android/Termux MongoDB DNS compatibility (working tree implementation)
-> **Current Layer**: Termux DNS resolver setup and OpenRouter response validation
-> **Layer Status**: IMPLEMENTED & VERIFIED — OpenRouter focused checks 14/14; full V3 suite 304/304
+> **Current Version**: V3.7.5 Multi-User Microsoft Device Code Flow (RFC 8628) (working tree implementation)
+> **Current Layer**: Direct Device Code Authentication & Telegram Integration
+> **Layer Status**: IMPLEMENTED & VERIFIED — Device Flow focused checks 31/31; full V3 suite 336/336
 
 ---
 
@@ -57,6 +57,7 @@ The distinction between **Committed**, **Implemented**, **Tested**, **Verified**
 | **V3.7.3-A** | whisper.cpp Transcription Adapter | Verified (Uncommitted) | Working Tree | `processing/transcriber.py`, `config.py`, `tests/test_v34_portability.py` (13 tests; complete V3 suite 285/285 pass) |
 | **V3.7.3-B** | whisper.cpp Docker & Runtime Packaging | Verified in tests (Uncommitted); Docker build unavailable | Working Tree | `Dockerfile`, `processing/transcriber.py`, `processing/worker.py`, `tests/test_v373_runtime_packaging.py` (15 tests; full V3 suite 300/300) |
 | **V3.7.4** | Android/Termux MongoDB DNS Compatibility | Verified in mocked tests | Working Tree | `storage/db.py`; `tests/test_v34_termux_dns.py` (11/11; full V3 suite 300/300) |
+| **V3.7.5** | Multi-User Microsoft Device Code Flow (RFC 8628) | Verified in mocked tests | Working Tree | `auth/device_flow.py`, `bot/telegram_bot.py`; `tests/test_v37_device_flow.py` (31/31; full V3 suite 336/336) |
 
 ---
 
@@ -88,9 +89,10 @@ Prior V3 suites were verified on 2026-11-01. Current task verification:
 - **After Android platform/path parsing correction**: `python -m unittest tests.test_v34_termux_dns` — **11/11 passed**; full V3 suite — **300/300 passed**.
 - **OpenRouter response validation**: `python -m unittest tests.test_v34_ai_gateway tests.test_v36_vision_remote` — **14/14 passed**; `python -m unittest discover -s tests -p "test_v3*.py"` — **304/304 passed**.
 - **Embedded Worker & OAuth Application.bot_data lifecycle**: `tests/test_v35_layer2.py` (22 passed), `tests/test_v36_oauth_lifecycle.py` (14 passed), `tests/test_v373_runtime_packaging.py` (17 passed); full V3 suite `python -m unittest discover -s tests -p "test_v3*.py"` — **305/305 passed**.
+- **V3.7.5 Multi-User Microsoft Device Code Flow (RFC 8628)**: `tests/test_v37_device_flow.py` (31/31 passed); full V3 suite `python -m unittest discover -s tests -p "test_v3*.py"` — **336/336 passed** (0 failures, 0 errors in 41.09s).
 
 > **Test Tracking Status**:
-> The active V3 regression suite is discovered by `python -m unittest discover -s tests -p "test_v3*.py"`. Its count changed from the historical 300 at the V3.7.3-B checkpoint to 285 after replacing legacy configurable-gateway contract coverage during the OpenRouter migration. Later integration, Termux DNS, OpenRouter response-validation coverage, and the slotted Application lifecycle regression test brings the current result to 305. Exploratory and manual verification scripts remain in `scratch/`.
+> The active V3 regression suite is discovered by `python -m unittest discover -s tests -p "test_v3*.py"`. Its count changed from the historical 300 at the V3.7.3-B checkpoint to 285 after replacing legacy configurable-gateway contract coverage during the OpenRouter migration. Later integration, Termux DNS, OpenRouter response-validation coverage, slotted Application lifecycle test, and V3.7.5 Device Code Flow suite brings the current result to 336. Exploratory and manual verification scripts remain in `scratch/`.
 
 ---
 

@@ -48,12 +48,21 @@ This historical recovery context is retained so the DNS checkpoint does not eras
 - Focused DNS tests: 11 passed. Full V3 suite: 300 passed.
 - No live DNS or MongoDB calls were made.
 
-## Embedded Worker & OAuth Lifecycle Application AttributeError Fix
+## Multi-User Microsoft Device Code Flow Authentication (RFC 8628)
 
-- **Problem:** In `bot/telegram_bot.py`, `_start_job_worker()` crashed on startup with `AttributeError: 'Application' object has no attribute 'job_worker_task' and no __dict__ for setting new attributes` because python-telegram-bot v20+ implements `telegram.ext.Application` as a slotted class without `__dict__`. The same latent failure existed for `_app.oauth_server` in `_start_oauth_server_task()`.
-- **Implementation:** Replaced arbitrary attribute assignment on `_app` with python-telegram-bot's official slotted dictionary `_app.bot_data["job_worker_task"]` and `_app.bot_data["oauth_server"]`. Updated `_stop_job_worker()` to safely cancel and await the task, and `_stop_oauth_server_task()` to pop the key.
+- **Objective:** Replace public OAuth callback URL, Cloudflare Tunnel, port 8080 listening, and reverse-proxy requirements with direct Microsoft Device Code Flow (RFC 8628) for Telegram `/connect`.
+- **Implementation:**
+  - Implemented `auth/device_flow.py` with `initiate_device_flow_for_user`, `poll_device_flow_step`, `fetch_user_profile`, and `complete_device_flow_connection`.
+  - Non-blocking single-step polling via MSAL `acquire_token_by_device_flow(flow, exit_condition=lambda f: True)` offloaded via `asyncio.to_thread`.
+  - Isolated token caches and PublicClientApplication per user; no secret used or required.
+  - Multi-user isolation and task tracking in `context.application.bot_data["active_device_flows"][user_id]`.
+  - Telegram `/connect` generates user-code, verification URL, and Cancel inline button; restricts execution in group chats.
+  - Background polling task `_poll_device_flow_task` manages lifecycle, updates prompt message, and notifies user upon completion, expiration, or denial.
+  - Callback handler `connection_callback` handles `device_cancel:<user_id>`, strictly enforces `acting_user_id == target_user_id` to prevent cross-user cancellation.
+  - Bot lifecycle hook `stop_active_device_flows` cancels all active device flow tasks on shutdown.
+  - Legacy OAuth modules (`auth/oauth_server.py`, `auth/state.py`, `storage/oauth_session.py`) fully preserved for rollback.
 - **Verification:**
-  - Added real slotted `Application` test `test_embedded_worker_lifecycle_with_slotted_application` in `tests/test_v35_layer2.py`.
-  - Focused suite: `python -m unittest tests.test_v35_layer2 tests.test_v36_oauth_lifecycle tests.test_v373_runtime_packaging` — 53 passed.
-  - Full V3 suite: `python -m unittest discover -s tests -p "test_v3*.py"` — 305/305 passed (0 failures, 0 errors in 10.958s).
+  - Added comprehensive test suite `tests/test_v37_device_flow.py` (31 unit and integration tests).
+  - Focused suite: `python -m unittest tests.test_v37_device_flow` — **31/31 passed**.
+  - Complete regression suite: `python -m unittest discover -s tests -p "test_v3*.py"` — **336/336 passed** (0 failures, 0 errors in 41.09s).
   - No database records, `.env`, or credentials modified. No commits or pushes performed.

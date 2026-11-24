@@ -2,8 +2,10 @@ import asyncio
 import datetime
 import io
 import json
+import logging
 import os
 import sys
+import time
 from pathlib import Path
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
@@ -28,6 +30,15 @@ from config import (
     REELFORGE_START_OAUTH_SERVER,
 )
 from auth.oauth_server import start_oauth_for_user, start_oauth_server, stop_oauth_server
+from auth.device_flow import (
+    DeviceFlowDuplicateAccountError,
+    DeviceFlowError,
+    complete_device_flow_connection,
+    initiate_device_flow_for_user,
+    poll_device_flow_step,
+)
+
+logger = logging.getLogger(__name__)
 from onenote.sanitizer import sanitize_page_title
 from processing.pipeline import process_reel
 from processing.worker import validate_worker_runtime, worker_loop
@@ -73,6 +84,7 @@ DISCONNECT_START = "disconnect:start"
 DISCONNECT_CONFIRM = "disconnect:confirm"
 DISCONNECT_CANCEL = "disconnect:cancel"
 STATUS_SHOW = "status:show"
+DEVICE_CANCEL_PREFIX = "device_cancel:"
 
 
 def _microsoft_status_text(user_id) -> str:
@@ -481,11 +493,199 @@ async def get_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
+def stop_active_device_flows(app) -> None:
+    """Cancel all active device flow polling tasks and clear tracking."""
+    try:
+        bot_data = getattr(app, "bot_data", {}) if app else {}
+        active_flows = bot_data.get("active_device_flows", {}) if isinstance(bot_data, dict) else {}
+        for uid, entry in list(active_flows.items()):
+            task, flow = entry
+            if isinstance(flow, dict):
+                flow["expires_at"] = 0
+            if hasattr(task, "cancel") and not task.done():
+                task.cancel()
+        active_flows.clear()
+        print("Active Microsoft device flows: stopped.")
+    except Exception as e:
+        logger.warning("Error stopping active device flows: %s", e)
+
+
+async def _poll_device_flow_task(
+    bot,
+    client,
+    cache,
+    flow: dict,
+    user_id: str,
+    chat_id,
+    status_message_id,
+    bot_data: dict | None,
+) -> None:
+    """Background task that polls Microsoft for device code completion.
+
+    Executes non-blocking single-step polling in a worker thread and sleeps
+    for the flow-specified interval. Upon completion, persists the connection,
+    updates the prompt message, and notifies the user.
+    """
+    try:
+        while time.time() < flow.get("expires_at", 0):
+            interval = flow.get("interval", 5)
+            await asyncio.sleep(interval)
+
+            if time.time() >= flow.get("expires_at", 0):
+                break
+
+            result = await asyncio.to_thread(poll_device_flow_step, client, flow)
+
+            if not isinstance(result, dict):
+                continue
+
+            if "access_token" in result:
+                try:
+                    updated = await asyncio.to_thread(
+                        complete_device_flow_connection,
+                        user_id,
+                        cache,
+                        result,
+                    )
+                    account_name = (
+                        updated.get("display_name")
+                        or updated.get("email")
+                        or "Microsoft account"
+                    )
+                    try:
+                        if status_message_id is not None:
+                            await bot.edit_message_text(
+                                chat_id=chat_id,
+                                message_id=status_message_id,
+                                text=f"Connected to Microsoft ({account_name}).",
+                            )
+                    except Exception:
+                        pass
+
+                    await bot.send_message(
+                        chat_id=chat_id,
+                        text=(
+                            "Microsoft account connected successfully!\n\n"
+                            f"Account: {account_name}\n\n"
+                            "OneNote publishing is now enabled for your reels."
+                        ),
+                    )
+                except DeviceFlowDuplicateAccountError:
+                    try:
+                        if status_message_id is not None:
+                            await bot.edit_message_text(
+                                chat_id=chat_id,
+                                message_id=status_message_id,
+                                text="⚠️ This Microsoft account is already connected to another ReelForge user.",
+                            )
+                    except Exception:
+                        pass
+                    await bot.send_message(
+                        chat_id=chat_id,
+                        text="⚠️ This Microsoft account is already connected to another ReelForge user.",
+                    )
+                except Exception as exc:
+                    logger.warning("Failed to complete device flow: %s", exc)
+                    try:
+                        if status_message_id is not None:
+                            await bot.edit_message_text(
+                                chat_id=chat_id,
+                                message_id=status_message_id,
+                                text="⚠️ Microsoft connection failed. Please try /connect again.",
+                            )
+                    except Exception:
+                        pass
+                    await bot.send_message(
+                        chat_id=chat_id,
+                        text="⚠️ Microsoft connection failed. Please try /connect again.",
+                    )
+                return
+
+            error = result.get("error")
+            if error in ("authorization_pending", "slow_down"):
+                continue
+            elif error == "expired_token":
+                try:
+                    if status_message_id is not None:
+                        await bot.edit_message_text(
+                            chat_id=chat_id,
+                            message_id=status_message_id,
+                            text="⏱️ The Microsoft login code has expired. Use /connect to start a new connection.",
+                        )
+                except Exception:
+                    await bot.send_message(
+                        chat_id=chat_id,
+                        text="⏱️ The Microsoft login code has expired. Use /connect to start a new connection.",
+                    )
+                return
+            elif error == "access_denied":
+                try:
+                    if status_message_id is not None:
+                        await bot.edit_message_text(
+                            chat_id=chat_id,
+                            message_id=status_message_id,
+                            text="❌ Microsoft connection was cancelled or denied.",
+                        )
+                except Exception:
+                    await bot.send_message(
+                        chat_id=chat_id,
+                        text="❌ Microsoft connection was cancelled or denied.",
+                    )
+                return
+            else:
+                logger.warning("Device flow polling error: %s", error)
+                try:
+                    if status_message_id is not None:
+                        await bot.edit_message_text(
+                            chat_id=chat_id,
+                            message_id=status_message_id,
+                            text="⚠️ Microsoft connection failed. Please try /connect again.",
+                        )
+                except Exception:
+                    await bot.send_message(
+                        chat_id=chat_id,
+                        text="⚠️ Microsoft connection failed. Please try /connect again.",
+                    )
+                return
+
+        # Expired by timestamp
+        try:
+            if status_message_id is not None:
+                await bot.edit_message_text(
+                    chat_id=chat_id,
+                    message_id=status_message_id,
+                    text="⏱️ The Microsoft login code has expired. Use /connect to start a new connection.",
+                )
+        except Exception:
+            await bot.send_message(
+                chat_id=chat_id,
+                text="⏱️ The Microsoft login code has expired. Use /connect to start a new connection.",
+            )
+    except asyncio.CancelledError:
+        pass
+    except Exception as exc:
+        logger.warning("Unexpected exception in device flow polling task: %s", exc)
+    finally:
+        if bot_data is not None and "active_device_flows" in bot_data:
+            flows = bot_data["active_device_flows"]
+            current = flows.get(user_id)
+            if current and current[0] is asyncio.current_task():
+                flows.pop(user_id, None)
+
+
 async def connect_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user, _ = _resolve_user(update)
     if user is None:
         await update.message.reply_text(
             "⚠️ Could not resolve your account. Please try /start first."
+        )
+        return
+
+    # For security, Microsoft device login must not be conducted in group chats
+    chat = getattr(update, "effective_chat", None)
+    if chat and getattr(chat, "type", "") not in ("private", ""):
+        await update.message.reply_text(
+            "🔒 For security, please connect your Microsoft account in a private chat with the bot."
         )
         return
 
@@ -506,23 +706,80 @@ async def connect_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
+    # Cancel previous pending flow for this user if one exists
+    bot_data = getattr(context.application, "bot_data", None) if context.application else None
+    if bot_data is not None:
+        active_flows = bot_data.setdefault("active_device_flows", {})
+        prev_entry = active_flows.get(user_id)
+        if prev_entry:
+            prev_task, prev_flow = prev_entry
+            if isinstance(prev_flow, dict):
+                prev_flow["expires_at"] = 0
+            if hasattr(prev_task, "cancel") and not prev_task.done():
+                prev_task.cancel()
+
     try:
-        auth_url = start_oauth_for_user(user_id)
-    except Exception as e:
-        print(f"Notice: OAuth start failed for {user_id}: {type(e).__name__}")
+        flow, token_cache, client = await asyncio.to_thread(
+            initiate_device_flow_for_user,
+            user_id,
+        )
+    except DeviceFlowError as exc:
+        logger.warning("Device flow initiation failed for %s: %s", user_id, exc)
+        await update.message.reply_text(
+            "⚠️ Microsoft connection is not available right now. "
+            "Please try again later."
+        )
+        return
+    except Exception as exc:
+        logger.warning("Unexpected error during device flow initiation: %s", exc)
         await update.message.reply_text(
             "⚠️ Microsoft connection is not available right now. "
             "Please try again later."
         )
         return
 
-    await update.message.reply_text(
+    user_code = flow.get("user_code", "")
+    verification_uri = flow.get("verification_uri") or "https://microsoft.com/devicelogin"
+    verification_url = flow.get("verification_uri_complete") or verification_uri
+    expires_in = flow.get("expires_in", 900)
+    expires_minutes = max(1, expires_in // 60)
+
+    msg_text = (
         "Connect your Microsoft account to enable OneNote saving.\n\n"
-        "Tap the button below to authorize ReelForge access.",
+        f"1. Open: {verification_uri}\n"
+        f"2. Enter code: {user_code}\n\n"
+        f"This code expires in {expires_minutes} minutes.\n"
+        "ReelForge will automatically detect when you approve."
+    )
+
+    sent_msg = await update.message.reply_text(
+        msg_text,
         reply_markup=InlineKeyboardMarkup(
-            [[InlineKeyboardButton("Connect Microsoft", url=auth_url)]]
+            [
+                [InlineKeyboardButton("Open Microsoft Login", url=verification_url)],
+                [InlineKeyboardButton("Cancel", callback_data=f"{DEVICE_CANCEL_PREFIX}{user_id}")],
+            ]
         ),
     )
+
+    chat_id = chat.id if chat else (update.message.chat_id if update.message else None)
+    status_msg_id = getattr(sent_msg, "message_id", None)
+
+    polling_task = asyncio.create_task(
+        _poll_device_flow_task(
+            bot=context.bot,
+            client=client,
+            cache=token_cache,
+            flow=flow,
+            user_id=user_id,
+            chat_id=chat_id,
+            status_message_id=status_msg_id,
+            bot_data=bot_data,
+        )
+    )
+
+    if bot_data is not None:
+        active_flows[user_id] = (polling_task, flow)
 
 
 async def mestatus_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -588,6 +845,28 @@ async def connection_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     user_id = user.get("user_id")
     data = getattr(query, "data", "") or ""
+
+    if data.startswith(DEVICE_CANCEL_PREFIX):
+        target_user_id = data[len(DEVICE_CANCEL_PREFIX):]
+        if target_user_id and target_user_id != user_id:
+            await query.answer("⚠️ You cannot cancel another user's login.", show_alert=True)
+            return
+
+        bot_data = getattr(context.application, "bot_data", {}) if context.application else {}
+        active_flows = bot_data.get("active_device_flows", {}) if isinstance(bot_data, dict) else {}
+        entry = active_flows.pop(user_id, None)
+        if entry:
+            task, flow = entry
+            if isinstance(flow, dict):
+                flow["expires_at"] = 0
+            if hasattr(task, "cancel") and not task.done():
+                task.cancel()
+
+        await query.edit_message_text(
+            "❌ Microsoft login cancelled.\n\n"
+            "Use /connect whenever you want to connect your account."
+        )
+        return
 
     if data == STATUS_SHOW:
         await query.edit_message_text(_microsoft_status_text(user_id))
@@ -1337,6 +1616,11 @@ def run_bot():
     else:
         print("Embedded OAuth server: OFF (standalone mode). Run via `python -m auth.oauth_server`.")
 
+    async def _stop_device_flows_task(_app):
+        stop_active_device_flows(_app)
+
+    post_shutdown_hooks.append(_stop_device_flows_task)
+
     builder = ApplicationBuilder().token(BOT_TOKEN)
 
     if post_init_hooks:
@@ -1376,7 +1660,10 @@ def run_bot():
     app.add_handler(CommandHandler("mestatus", mestatus_command))
     app.add_handler(CommandHandler("disconnect", disconnect_command))
     app.add_handler(
-        CallbackQueryHandler(connection_callback, pattern=r"^(disconnect:|status:)")
+        CallbackQueryHandler(
+            connection_callback,
+            pattern=r"^(disconnect:|status:|device_cancel:)",
+        )
     )
 
     # Register URL ingestion handler (for non-command text)
